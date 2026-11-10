@@ -40,7 +40,7 @@ html = must_replace(html, ".wrap { max-width: 1080px; margin: 0 auto; padding: 1
     ".wrap { max-width: 1080px; margin: 0 auto; padding: calc(14px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left)); }")
 
 # регистрация service worker (только на сайте, не внутри Android-приложения)
-html = must_replace(html, "renderChip(); renderDistance(); fillConditions(); renderClock(); show();", """renderChip(); renderDistance(); fillConditions(); renderClock(); show();
+html = must_replace(html, "renderChip(); renderDistance(); fillConditions(); renderClock(); renderAz(); renderWx(); show();", """renderChip(); renderDistance(); fillConditions(); renderClock(); renderAz(); renderWx(); show();
 
 (function registerOffline() {
   const native = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();

@@ -116,7 +116,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 14px 0 8px
 /* Поля-счётчики */
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (max-width: 360px) { .fields { grid-template-columns: 1fr; } }
-.field { display: grid; gap: 4px; }
+.field { display: grid; gap: 4px; align-content: start; }
 .field > label { font-size: 13px; color: var(--muted); font-weight: 500; }
 .stepper { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); overflow: hidden; }
 .stepper button { height: 44px; border: 0; background: transparent; cursor: pointer; font: 600 22px var(--font-num); color: var(--muted); }
@@ -200,6 +200,27 @@ tr.cur td { background: var(--accent-soft); }
 .true-res .ba { display: flex; align-items: baseline; gap: 10px; font: 700 30px/1 var(--font-num); flex-wrap: wrap; }
 .true-res .ba s { color: var(--muted); font-weight: 500; font-size: 22px; }
 .steps-hint { margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); display: grid; gap: 3px; }
+/* Погода и датчики */
+.wx-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.wx-bar .btn { display: inline-flex; align-items: center; gap: 6px; }
+.wx-bar svg { width: 18px; height: 18px; flex: none; }
+.wx-info { font-size: 13.5px; background: var(--paper); border-radius: 10px; padding: 9px 12px; margin-bottom: 12px; display: grid; gap: 4px; }
+.wx-info b { font-weight: 600; }
+.wx-city { display: grid; gap: 6px; margin-bottom: 12px; }
+.wx-city input { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); padding: 10px 12px; font-size: 16px; }
+.wx-city .opt { text-align: left; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+.wx-city .opt small { color: var(--muted); }
+.link-btn { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; font-size: 13px; cursor: pointer; text-align: left; }
+.dir-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 13.5px; flex-wrap: wrap; }
+.sensor-back { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40; display: grid; align-items: end; justify-items: center; }
+.sensor { background: var(--card); color: var(--ink); width: 100%; max-width: 520px; border-radius: 18px 18px 0 0; padding: 20px 18px calc(18px + env(safe-area-inset-bottom)); display: grid; gap: 12px; }
+.sensor h3 { margin: 0; font: 700 20px var(--font-num); text-transform: uppercase; letter-spacing: .03em; }
+.sensor .live { font: 700 64px/1 var(--font-num); text-align: center; font-variant-numeric: tabular-nums; }
+.sensor .live small { font-size: 22px; color: var(--muted); font-weight: 600; }
+.sensor .sub { text-align: center; color: var(--muted); font-size: 14px; min-height: 1.4em; }
+.sensor .acts { display: flex; gap: 8px; }
+.sensor .acts .btn { flex: 1; padding: 13px; }
+.sensor-pic { display: block; margin: 0 auto; width: 150px; height: auto; color: var(--muted); }
 /* Плашка под строкой состояния телефона */
 body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: var(--paper); z-index: 30; pointer-events: none; }
 /* Нижняя навигация */
@@ -325,11 +346,20 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
 
         <div class="card">
           <h2>Условия сейчас</h2>
+          <div class="wx-bar">
+            <button class="btn primary" type="button" id="wxHere"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Погода по месту</button>
+            <button class="btn" type="button" id="wxCityBtn">Найти город</button>
+          </div>
+          <div class="wx-city" id="wxCityBox" hidden>
+            <input type="search" id="wxCity" placeholder="Например: Алматы, Караганда, Шымкент" aria-label="Город" enterkeyhint="search">
+            <div id="wxCityRes" class="wx-city"></div>
+          </div>
+          <div class="wx-info" id="wxInfo" hidden></div>
           <div class="fields">
             <div class="field"><label for="cTemp">Температура воздуха</label><div class="stepper" data-for="cTemp" data-step="1"><button type="button" data-d="-1" aria-label="Меньше">−</button><span class="inp"><input id="cTemp" type="number" inputmode="decimal" step="1"><span class="u">°C</span></span><button type="button" data-d="1" aria-label="Больше">+</button></div></div>
             <div class="field"><label for="cPress">Давление</label><div class="stepper" data-for="cPress" data-step="5"><button type="button" data-d="-1" aria-label="Меньше">−</button><span class="inp"><input id="cPress" type="number" inputmode="decimal" step="1"><span class="u">мм</span></span><button type="button" data-d="1" aria-label="Больше">+</button></div><span class="hint">Как в прогнозе погоды, мм рт. ст.</span></div>
             <div class="field"><label for="cHum">Влажность</label><div class="stepper" data-for="cHum" data-step="10"><button type="button" data-d="-1" aria-label="Меньше">−</button><span class="inp"><input id="cHum" type="number" inputmode="decimal" min="0" max="100"><span class="u">%</span></span><button type="button" data-d="1" aria-label="Больше">+</button></div></div>
-            <div class="field"><label for="cAngle">Угол на цель</label><div class="stepper" data-for="cAngle" data-step="5"><button type="button" data-d="-1" aria-label="Меньше">−</button><span class="inp"><input id="cAngle" type="number" inputmode="decimal" min="-60" max="60"><span class="u">°</span></span><button type="button" data-d="1" aria-label="Больше">+</button></div><span class="hint">+ вверх по склону, − вниз</span></div>
+            <div class="field"><label for="cAngle">Угол на цель</label><div class="stepper" data-for="cAngle" data-step="5"><button type="button" data-d="-1" aria-label="Меньше">−</button><span class="inp"><input id="cAngle" type="number" inputmode="decimal" min="-60" max="60"><span class="u">°</span></span><button type="button" data-d="1" aria-label="Больше">+</button></div><span class="hint">+ вверх по склону, − вниз</span><button type="button" class="link-btn" id="measureAngle">Измерить телефоном</button></div>
           </div>
 
           <h2 style="margin-top:18px">Ветер</h2>
@@ -339,6 +369,7 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
               <div class="wind-text" id="windText">—</div>
               <div class="field"><label for="cWind">Скорость ветра</label><div class="stepper" data-for="cWind" data-step="1"><button type="button" data-d="-1" aria-label="Меньше">−</button><span class="inp"><input id="cWind" type="number" inputmode="decimal" min="0" max="30" step="0.5"><span class="u">м/с</span></span><button type="button" data-d="1" aria-label="Больше">+</button></div></div>
               <p class="hint" style="margin:8px 0 0">Нажмите на круг, откуда дует ветер. Вы — в центре, цель — сверху.</p>
+              <div class="dir-row"><span id="azText">Направление на цель: не задано</span><button type="button" class="link-btn" id="measureAz">Компас</button></div>
             </div>
           </div>
 
@@ -402,6 +433,16 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
   </section>
 </div>
 <div class="toast" id="toast" role="status"></div>
+<div class="sensor-back" id="sensorBack" hidden>
+  <div class="sensor" role="dialog" aria-modal="true" aria-labelledby="sensorTitle">
+    <h3 id="sensorTitle">Угол на цель</h3>
+    <div id="sensorPic"></div>
+    <p class="hint" id="sensorHow" style="margin:0"></p>
+    <div class="live" id="sensorLive">—</div>
+    <div class="sub" id="sensorSub">Ждём данные датчика…</div>
+    <div class="acts"><button class="btn accent" type="button" id="sensorOk" disabled>Записать</button><button class="btn" type="button" id="sensorCancel">Отмена</button></div>
+  </div>
+</div>
 
 <script>
 /*ENGINE*/
@@ -630,6 +671,7 @@ function fillConditions() {
 function readField(id) {
   const el = $('#' + id); let v = parseFloat(String(el.value).replace(',', '.'));
   if (isNaN(v)) return;
+  if (id === 'cAz') { S.cond.azKnown = true; setTimeout(() => { renderAz(); renderWx(); }, 0); }
   if (id === 'tMax') { S.tableMax = Math.min(2500, Math.max(100, v)); return; }
   if (id === 'tStep') { S.tableStep = Math.min(500, Math.max(10, v)); return; }
   const k = COND_FIELDS[id]; const lim = LIMITS[k];
@@ -747,7 +789,7 @@ function renderEditor() {
   </fieldset>
 
   <fieldset><legend>Патрон</legend>
-    <div class="f"><label for="eBq">Пуля</label><input type="search" id="eBq" placeholder="Поиск: 308 175, eld 6.5, lapua…">
+    <div class="f"><label for="eBq">Пуля</label><input type="search" id="eBq" placeholder="Поиск: 308 175, 7н1, 5.45, lapua…">
       ${b ? `<span class="hint">Выбрано: <b>${esc(b.maker + ' ' + b.caliber + ' ' + b.mass_gr + 'gr ' + b.name)}</b></span>` : '<span class="hint">Найдите пулю в списке ниже</span>'}</div>
     <div class="bullet-results" id="eBres"></div>
     <details id="customBox"><summary class="hint" style="cursor:pointer">Моей пули нет в списке — ввести вручную</summary>
@@ -786,17 +828,18 @@ function renderEditor() {
   updateSg();
 }
 function renderBulletResults(q) {
-  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const norm = t => t.toLowerCase().replace(/,/g, '.').replace(/×/g, 'x').replace(/х/g, 'x').replace(/н/g, 'n');
+  const words = norm(q).split(/\s+/).filter(Boolean);
   const caliberHint = (draft.caliber.match(/\d{3}|\d\.\d|\d{2,3}/) || [''])[0];
   let list = allBullets().filter(b => {
-    const hay = `${b.maker} ${b.name} ${b.caliber} ${b.mass_gr}gr ${b.mass_gr}`.toLowerCase();
+    const hay = norm(`${b.maker} ${b.name} ${b.caliber} ${b.caliber.replace(/[^0-9a-zа-я]/gi, '')} ${b.mass_gr}gr ${b.mass_gr} ${b.mass_g}г`);
     return words.every(w => hay.includes(w));
   });
   if (!words.length && caliberHint) {
     const m = list.filter(b => b.caliber.includes(caliberHint)); if (m.length) list = m;
   }
   $('#eBres').innerHTML = list.slice(0, 12).map(b => `<button type="button" class="bullet-opt" data-bid="${b.id}" aria-pressed="${b.id === draft.bulletId}">
-    <b>${esc(b.maker)} ${b.mass_gr}gr ${esc(b.name)}</b><small>${esc(b.caliber)} · G1 ${b.bc_g1}${b.bc_g7 ? ' · G7 ' + b.bc_g7 : ''}</small></button>`).join('')
+    <b>${esc(b.maker)} ${b.mass_gr}gr ${esc(b.name)}</b><small>${esc(b.caliber)} · ${b.mass_g} г · G1 ${b.approx ? '≈' : ''}${b.bc_g1}${b.bc_g7 ? ' · G7 ' + (b.approx ? '≈' : '') + b.bc_g7 : ''}${b.note ? '<br>' + esc(b.note) : ''}</small></button>`).join('')
     || '<p class="hint">Ничего не найдено — введите пулю вручную ниже.</p>';
 }
 function readEditor() {
@@ -873,6 +916,179 @@ $('#importBtn').addEventListener('click', () => {
     renderRifleList(); renderChip(); $('#importBox').hidden = true; toast(`Загружено винтовок: ${S.rifles.length}`);
   } catch (e) { toast('Не получилось прочитать текст копии'); }
 });
+
+// ---------- погода ----------
+const COMPASS_FROM = ['севера', 'северо-востока', 'востока', 'юго-востока', 'юга', 'юго-запада', 'запада', 'северо-запада'];
+const COMPASS_AT = ['севере', 'северо-востоке', 'востоке', 'юго-востоке', 'юге', 'юго-западе', 'западе', 'северо-западе'];
+const sector8 = deg => Math.round((((deg % 360) + 360) % 360) / 45) % 8;
+const azKnown = () => S.cond.azKnown === true;
+// откуда дует ветер (градусы по компасу) → «часы» относительно направления на цель
+function windToClock(fromDeg, az) {
+  const h = Math.round(((((fromDeg - az) % 360) + 360) % 360) / 30);
+  return h === 0 || h === 12 ? 12 : h;
+}
+
+function renderAz() {
+  $('#azText').textContent = azKnown()
+    ? `Направление на цель: ${Math.round(S.cond.az)}° (на ${COMPASS_AT[sector8(S.cond.az)]})`
+    : 'Направление на цель: не задано';
+}
+function applyForecastWind(silent) {
+  const w = S.wx; if (!w || !azKnown()) return false;
+  S.cond.windMs = Math.round(w.wind * 2) / 2;
+  S.cond.windClock = windToClock(w.windDir, S.cond.az);
+  $('#cWind').value = S.cond.windMs; renderClock(); schedule();
+  if (!silent) toast(`Ветер из прогноза: ${fmt(S.cond.windMs, 1)} м/с, ${S.cond.windClock} ч`);
+  return true;
+}
+function renderWx() {
+  const w = S.wx, box = $('#wxInfo');
+  if (!w) { box.hidden = true; return; }
+  const age = Math.round((Date.now() - w.at) / 60000);
+  const ageTxt = age < 1 ? 'только что' : age < 60 ? `${age} мин назад` : age < 1440 ? `${Math.round(age / 60)} ч назад` : 'давно — обновите';
+  let wind = `Ветер по прогнозу: <b>${fmt(w.wind, 1)} м/с</b>${w.gust ? ` (порывы до ${fmt(w.gust, 0)})` : ''} с ${COMPASS_FROM[sector8(w.windDir)]}.`;
+  wind += azKnown()
+    ? ` <button type="button" class="link-btn" id="wxWindApply">Подставить в «часы»</button>`
+    : ` Чтобы перевести его в «часы», задайте направление на цель: <button type="button" class="link-btn" id="wxNeedAz">Компас</button>`;
+  box.innerHTML = `<div><b>${esc(w.place)}</b> · обновлено ${ageTxt}${w.elev != null ? ` · высота ${fmt(w.elev)} м` : ''}</div>
+    <div>Подставлены температура, давление на этой высоте и влажность.</div>
+    <div>${wind}</div>
+    <div class="hint">Прогноз даёт ветер на высоте 10 м — у земли он обычно слабее. Перед выстрелом сверяйтесь с флажками и травой.</div>`;
+  box.hidden = false;
+}
+async function loadWeather(lat, lon, place) {
+  const info = $('#wxInfo'); info.hidden = false; info.textContent = 'Загружаю погоду…';
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
+      `&current=temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=ms&timezone=auto`;
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('http ' + r.status);
+    const j = await r.json(), c = j.current;
+    if (!c || c.surface_pressure == null) throw new Error('no data');
+    S.cond.temp = Math.round(c.temperature_2m);
+    S.cond.pressureMm = Math.round(c.surface_pressure / MM_TO_HPA);   // давление на высоте места, а не «приведённое к морю»
+    S.cond.humidity = Math.round(c.relative_humidity_2m);
+    S.cond.lat = Math.round(lat * 10) / 10;                            // широта — для Кориолиса
+    S.wx = { place, at: Date.now(), wind: c.wind_speed_10m, gust: c.wind_gusts_10m, windDir: c.wind_direction_10m, elev: j.elevation };
+    fillConditions(); applyForecastWind(true); renderWx(); schedule();
+    toast('Погода подставлена');
+  } catch (e) {
+    info.innerHTML = navigator.onLine === false
+      ? 'Нет интернета. Погоду можно ввести вручную — поля ниже.'
+      : 'Не удалось получить погоду. Попробуйте ещё раз или введите вручную.';
+  }
+}
+$('#wxHere').addEventListener('click', () => {
+  const info = $('#wxInfo');
+  if (!navigator.geolocation) { info.hidden = false; info.textContent = 'Местоположение недоступно — найдите город.'; $('#wxCityBox').hidden = false; return; }
+  info.hidden = false; info.textContent = 'Определяю местоположение…';
+  navigator.geolocation.getCurrentPosition(
+    pos => loadWeather(pos.coords.latitude, pos.coords.longitude, 'Ваше местоположение'),
+    err => {
+      info.innerHTML = err.code === 1
+        ? 'Доступ к местоположению запрещён. Разрешите его для «Поправки» в настройках телефона или найдите город.'
+        : 'Не удалось определить местоположение. Включите геолокацию или найдите город.';
+      $('#wxCityBox').hidden = false;
+    },
+    { enableHighAccuracy: false, timeout: 15000, maximumAge: 10 * 60 * 1000 });
+});
+$('#wxCityBtn').addEventListener('click', () => { const b = $('#wxCityBox'); b.hidden = !b.hidden; if (!b.hidden) $('#wxCity').focus(); });
+let cityTimer = null;
+$('#wxCity').addEventListener('input', e => {
+  clearTimeout(cityTimer); const q = e.target.value.trim();
+  if (q.length < 2) { $('#wxCityRes').innerHTML = ''; return; }
+  cityTimer = setTimeout(async () => {
+    try {
+      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=ru&format=json`);
+      const j = await r.json();
+      $('#wxCityRes').innerHTML = (j.results || []).map(c => `<button type="button" class="opt" data-lat="${c.latitude}" data-lon="${c.longitude}" data-name="${esc(c.name)}">${esc(c.name)} <small>${esc([c.admin1, c.country].filter(Boolean).join(', '))}</small></button>`).join('')
+        || '<p class="hint">Ничего не найдено</p>';
+    } catch (err) { $('#wxCityRes').innerHTML = '<p class="hint">Нет связи с сервером поиска</p>'; }
+  }, 350);
+});
+$('#wxCityRes').addEventListener('click', e => {
+  const o = e.target.closest('.opt'); if (!o) return;
+  $('#wxCityBox').hidden = true; $('#wxCity').value = ''; $('#wxCityRes').innerHTML = '';
+  loadWeather(+o.dataset.lat, +o.dataset.lon, o.dataset.name);
+});
+$('#wxInfo').addEventListener('click', e => {
+  if (e.target.id === 'wxWindApply') applyForecastWind(false);
+  if (e.target.id === 'wxNeedAz') openSensor('heading');
+});
+
+// ---------- датчики телефона: наклон и компас ----------
+const SENSOR_TXT = {
+  angle: { title: 'Угол на цель', how: 'Положите телефон на ствол или цевьё экраном вверх, верхним краем к цели. Наведите винтовку на цель и замрите на пару секунд.' },
+  heading: { title: 'Направление на цель', how: 'Держите телефон горизонтально экраном вверх, верхним краем точно на цель. Отойдите от машины и металла — они сбивают компас. Точность ±5–10°, для ветра этого достаточно.' },
+};
+const SENSOR_PIC = `<svg class="sensor-pic" viewBox="0 0 150 60" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 42h98l10-8h28"/><rect x="38" y="25" width="46" height="14" rx="3" fill="var(--paper)"/><path d="M84 32h10" stroke="var(--accent)" stroke-width="2.5"/><path d="M122 20l14 12-14 12" stroke="var(--accent)"/></svg>`;
+let sensor = null;
+function sensorStop() {
+  if (sensor) { window.removeEventListener(sensor.evt, sensor.fn, true); clearTimeout(sensor.noData); }
+  sensor = null; $('#sensorBack').hidden = true;
+}
+async function openSensor(mode) {
+  sensorStop();
+  const t = SENSOR_TXT[mode];
+  $('#sensorTitle').textContent = t.title; $('#sensorHow').textContent = t.how; $('#sensorPic').innerHTML = SENSOR_PIC;
+  $('#sensorLive').textContent = '—'; $('#sensorSub').textContent = 'Ждём данные датчика…'; $('#sensorOk').disabled = true;
+  $('#sensorBack').hidden = false;
+  // iPhone спрашивает разрешение на датчики только по нажатию кнопки.
+  // Если ответ «нет» — всё равно слушаем: на части Android-телефонов датчики работают и без этого разрешения.
+  let denied = false;
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      denied = (await DeviceOrientationEvent.requestPermission()) !== 'granted';
+    }
+  } catch (e) {}
+  const st = { mode, sx: 0, sy: 0, val: null, n: 0 };
+  const useAbs = mode === 'heading' && 'ondeviceorientationabsolute' in window;
+  st.evt = useAbs ? 'deviceorientationabsolute' : 'deviceorientation';
+  st.fn = e => {
+    let v = null;
+    if (mode === 'angle') { if (e.beta == null) return; v = Math.max(-80, Math.min(80, e.beta)); }
+    else if (typeof e.webkitCompassHeading === 'number') v = e.webkitCompassHeading;          // iPhone
+    else if (e.alpha != null && (useAbs || e.absolute)) v = (360 - e.alpha) % 360;           // Android
+    else return;
+    clearTimeout(st.noData);
+    st.n++;
+    if (mode === 'angle') st.val = st.val == null ? v : st.val * 0.85 + v * 0.15;
+    else {  // усреднение по кругу, чтобы 359° и 1° не давали 180°
+      const r = v * Math.PI / 180;
+      st.sx = st.n === 1 ? Math.cos(r) : st.sx * 0.85 + Math.cos(r) * 0.15;
+      st.sy = st.n === 1 ? Math.sin(r) : st.sy * 0.85 + Math.sin(r) * 0.15;
+      st.val = (Math.atan2(st.sy, st.sx) * 180 / Math.PI + 360) % 360;
+    }
+    const shown = mode === 'angle' ? (st.val >= 0.5 ? '+' : '') + fmt(st.val, 0) : fmt(st.val, 0);
+    $('#sensorLive').innerHTML = `${shown}<small>°</small>`;
+    $('#sensorSub').textContent = mode === 'angle'
+      ? (Math.abs(st.val) < 0.5 ? 'Ровно' : st.val > 0 ? 'Цель выше вас' : 'Цель ниже вас')
+      : `Цель на ${COMPASS_AT[sector8(st.val)]}`;
+    if (st.n > 8) $('#sensorOk').disabled = false;
+  };
+  st.noData = setTimeout(() => {
+    $('#sensorSub').textContent = denied
+      ? 'Доступ к датчикам не разрешён. Разрешите «Движение и ориентация» в настройках Safari или введите значение вручную.'
+      : mode === 'heading'
+      ? 'Компас на этом телефоне недоступен. Введите направление вручную в разделе «Дополнительно».'
+      : 'Датчик наклона недоступен. Введите угол вручную.';
+  }, 3000);
+  window.addEventListener(st.evt, st.fn, true);
+  sensor = st;
+}
+$('#sensorCancel').addEventListener('click', sensorStop);
+$('#sensorBack').addEventListener('click', e => { if (e.target.id === 'sensorBack') sensorStop(); });
+$('#sensorOk').addEventListener('click', () => {
+  if (!sensor || sensor.val == null) return;
+  if (sensor.mode === 'angle') { S.cond.lookDeg = Math.round(sensor.val); toast(`Угол на цель: ${S.cond.lookDeg}°`); }
+  else {
+    S.cond.az = Math.round(sensor.val) % 360; S.cond.azKnown = true;
+    if (!applyForecastWind(false)) toast(`Направление на цель: ${S.cond.az}°`);
+  }
+  sensorStop(); fillConditions(); renderAz(); renderWx(); schedule();
+});
+$('#measureAngle').addEventListener('click', () => openSensor('angle'));
+$('#measureAz').addEventListener('click', () => openSensor('heading'));
 
 // ---------- уточнение по попаданию ----------
 const TR = { dir: -1, unit: 'cm', par: 'v0' };
@@ -965,7 +1181,7 @@ function show() {
 }
 window.addEventListener('hashchange', show);
 
-renderChip(); renderDistance(); fillConditions(); renderClock(); show();
+renderChip(); renderDistance(); fillConditions(); renderClock(); renderAz(); renderWx(); show();
 </script>
 </body>
 </html>

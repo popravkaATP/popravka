@@ -1,5 +1,5 @@
 {
- "_info": "BC — данные производителей (Hornady, Sierra, Lapua), BC для скорости около Мах 2.25 у Hornady. Длина пуль (length_mm) — примерная, нужна только для расчёта деривации; уточните штангенциркулем.",
+ "_info": "BC — данные производителей (Hornady, Sierra, Lapua), BC для скорости около Мах 2.25 у Hornady. Длина пуль (length_mm) — примерная, нужна только для расчёта деривации; уточните штангенциркулем. Военные патроны (7Н1, ЛПС, 7Н6, 7Н10, М43) помечены approx: BC — оценки из открытых источников.",
  "bullets": [
   {
    "id": "sierra-224-77-smk",
@@ -299,6 +299,107 @@
    "bc_g7": 0.417,
    "length_mm": 44.4,
    "min_twist_in": null
+  },
+  {
+   "id": "mil-7n1",
+   "maker": "7Н1",
+   "name": "снайперская (СВД)",
+   "caliber": "7,62×54R",
+   "diameter_mm": 7.92,
+   "mass_gr": 151.2,
+   "mass_g": 9.8,
+   "bc_g1": 0.411,
+   "bc_g7": 0.206,
+   "length_mm": 33.5,
+   "min_twist_in": null,
+   "approx": true,
+   "note": "BC — оценка по открытым источникам; уточните по попаданиям"
+  },
+  {
+   "id": "mil-lps",
+   "maker": "ЛПС 57-Н-323С",
+   "name": "со стальным сердечником",
+   "caliber": "7,62×54R",
+   "diameter_mm": 7.92,
+   "mass_gr": 148.2,
+   "mass_g": 9.6,
+   "bc_g1": 0.374,
+   "bc_g7": 0.187,
+   "length_mm": 32.5,
+   "min_twist_in": null,
+   "approx": true,
+   "note": "BC — оценка по открытым источникам; уточните по попаданиям"
+  },
+  {
+   "id": "sierra-311-174-smk",
+   "maker": "Sierra",
+   "name": "MatchKing HPBT #2315",
+   "caliber": "7,62×54R / .303 (.311)",
+   "diameter_mm": 7.9,
+   "mass_gr": 174,
+   "mass_g": 11.28,
+   "bc_g1": 0.499,
+   "bc_g7": null,
+   "length_mm": 31.2,
+   "min_twist_in": null
+  },
+  {
+   "id": "lapua-310-200-d166",
+   "maker": "Lapua",
+   "name": "D166 FMJBT",
+   "caliber": "7,62×54R (.310)",
+   "diameter_mm": 7.87,
+   "mass_gr": 200,
+   "mass_g": 13.0,
+   "bc_g1": 0.448,
+   "bc_g7": 0.224,
+   "length_mm": 33.0,
+   "min_twist_in": null
+  },
+  {
+   "id": "mil-7n6",
+   "maker": "7Н6",
+   "name": "ПС, стальной сердечник",
+   "caliber": "5,45×39",
+   "diameter_mm": 5.62,
+   "mass_gr": 52.9,
+   "mass_g": 3.43,
+   "bc_g1": 0.339,
+   "bc_g7": 0.168,
+   "length_mm": 25.5,
+   "min_twist_in": null,
+   "approx": true,
+   "note": "G7 измерен BRL (США); G1 — пересчёт"
+  },
+  {
+   "id": "mil-7n10",
+   "maker": "7Н10",
+   "name": "повышенной пробиваемости",
+   "caliber": "5,45×39",
+   "diameter_mm": 5.62,
+   "mass_gr": 55.9,
+   "mass_g": 3.62,
+   "bc_g1": 0.351,
+   "bc_g7": 0.176,
+   "length_mm": 25.5,
+   "min_twist_in": null,
+   "approx": true,
+   "note": "BC — оценка по открытым источникам; уточните по попаданиям"
+  },
+  {
+   "id": "mil-57n231",
+   "maker": "57-Н-231 (М43)",
+   "name": "ПС, стальной сердечник",
+   "caliber": "7,62×39",
+   "diameter_mm": 7.92,
+   "mass_gr": 121.9,
+   "mass_g": 7.9,
+   "bc_g1": 0.309,
+   "bc_g7": 0.155,
+   "length_mm": 26.8,
+   "min_twist_in": null,
+   "approx": true,
+   "note": "G7 близок к измеренному на Абердинском полигоне (0,156)"
   }
  ]
 }
