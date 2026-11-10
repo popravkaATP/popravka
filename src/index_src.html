@@ -229,6 +229,7 @@ tr.cur td { background: var(--accent-soft); }
 .mag b { font: 700 22px var(--font-num); min-width: 3ch; text-align: center; }
 .round-btn.sm { width: 36px; height: 36px; font-size: 20px; }
 .load-bar { align-items: center; }
+.chips.mini .chip { font-size: 13.5px; padding: 4px 10px; }
 .card-sheet { max-height: 94vh; overflow: auto; }
 .card-sheet img { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); display: block; }
 .card-sheet .acts a { text-align: center; text-decoration: none; color: var(--ink); }
@@ -935,6 +936,24 @@ $('#rifleList').addEventListener('click', e => {
   if (b.dataset.act === 'edit') openEditor(r);
 });
 
+// Популярные калибры: типичный шаг нарезов и метки калибра пуль в базе
+const CALIBERS = [
+  { name: '.308 Win', twist: 10, keys: ['.308'] },
+  { name: '6.5 Creedmoor', twist: 8, keys: ['6.5mm'] },
+  { name: '.223 Rem / 5.56', twist: 8, keys: ['.223', '.224'] },
+  { name: '7.62×54R', twist: 9.45, keys: ['54R'] },
+  { name: '7.62×39', twist: 9.45, keys: ['7,62×39'] },
+  { name: '5.45×39', twist: 7.7, keys: ['5,45×39'] },
+  { name: '.30-06', twist: 10, keys: ['.308'] },
+  { name: '.300 Win Mag', twist: 10, keys: ['.308'] },
+  { name: '.338 Lapua Mag', twist: 10, keys: ['.338'] },
+  { name: '6mm Creedmoor', twist: 7.5, keys: ['6mm'] },
+  { name: '.243 Win', twist: 10, keys: ['6mm'] },
+  { name: '6.5×55', twist: 7.87, keys: ['6.5mm'] },
+  { name: '7mm Rem Mag', twist: 9.5, keys: ['7mm'] },
+];
+const calNorm = t => String(t || '').toLowerCase().replace(/[\s.,]/g, '').replace(/[×хx]/g, 'x');
+const findCal = name => CALIBERS.find(c => calNorm(c.name) === calNorm(name) || calNorm(c.name).split('/')[0] === calNorm(name));
 let draft = null;
 const curL = () => draft.loads.find(l => l.id === draft._loadId) || draft.loads[0];
 function openEditor(r) {
@@ -961,9 +980,11 @@ function renderEditor() {
   <fieldset><legend>${d._isNew ? 'Новая винтовка' : 'Винтовка'}</legend>
     <div class="f"><label for="eName">Название</label><input type="text" id="eName" value="${esc(d.name)}" placeholder="Например: Тикка .308 охота"></div>
     <div class="two">
-      <div class="f"><label for="eCal">Калибр</label><input type="text" id="eCal" value="${esc(d.caliber)}"></div>
+      <div class="f"><label for="eCal">Калибр</label><input type="text" id="eCal" value="${esc(d.caliber)}" list="calList" autocomplete="off" placeholder="Начните вводить или выберите ниже">
+        <datalist id="calList">${CALIBERS.map(c => `<option value="${c.name}">`).join('')}</datalist></div>
       ${fNum('eSight', 'Высота прицела', d.sightCm, 'см', 'От оси ствола до оси прицела')}
     </div>
+    <div class="chips mini" id="calChips">${CALIBERS.slice(0, 9).map(c => `<button type="button" class="chip" data-cal="${c.name}" aria-pressed="${!!findCal(d.caliber) && findCal(d.caliber).name === c.name}">${c.name}</button>`).join('')}</div>
     <div class="two">
       ${fNum('eTwist', 'Шаг нарезов', d.twistIn, 'дюймы', 'Для 1:10″ введите 10')}
       <div class="f"><label>Нарезы</label>${seg('tw', [['1', 'Правые'], ['0', 'Левые']], d.twistRight ? '1' : '0', 'Направление нарезов')}
@@ -975,7 +996,8 @@ function renderEditor() {
     <div class="two">
       <div class="f"><label>Единицы барабанов</label>${seg('un', [['MRAD', 'MRAD'], ['MOA', 'MOA']], d.units, 'Единицы барабанов')}
         <span class="hint">Написано на барабане прицела</span></div>
-      ${fNum('eClick', 'Цена клика', d.click, d.units, d.units === 'MRAD' ? 'Обычно 0.1' : 'Обычно 0.25')}
+      <div class="f">${fNum('eClick', 'Цена клика', d.click, d.units, '')}
+        <div class="chips mini">${(d.units === 'MRAD' ? [0.1, 0.05] : [0.25, 0.125, 0.5]).map(v => `<button type="button" class="chip" data-click="${v}" aria-pressed="${d.click === v}">${v}</button>`).join('')}</div></div>
     </div>
     <div class="f"><label>Сетка</label>${seg('ret', retOpts, d.reticle, 'Тип сетки')}
       <span class="hint">Выберите похожую на вашу: важны не узоры, а есть ли деления и какие.</span></div>
@@ -1019,6 +1041,7 @@ function renderEditor() {
 
   <fieldset><legend>Пристрелка</legend>
     ${fNum('eZero', 'Дистанция пристрелки', d.zeroM, 'м')}
+    <div class="chips mini">${[50, 100, 200, 300].map(v => `<button type="button" class="chip" data-zero="${v}" aria-pressed="${d.zeroM === v}">${v} м</button>`).join('')}</div>
     <div class="two">${fNum('eZt', 'Температура тогда', d.zero.temp, '°C')}${fNum('eZp', 'Давление тогда', d.zero.pressureMm, 'мм')}</div>
     <span class="hint">Если не помните — оставьте как есть.</span>
     <div id="eSg"></div>
@@ -1035,16 +1058,17 @@ function renderEditor() {
 function renderBulletResults(q) {
   const norm = t => t.toLowerCase().replace(/,/g, '.').replace(/×/g, 'x').replace(/х/g, 'x').replace(/н/g, 'n');
   const words = norm(q).split(/\s+/).filter(Boolean);
-  const caliberHint = (draft.caliber.match(/\d{3}|\d\.\d|\d{2,3}/) || [''])[0];
-  const L = curL();
+  const L = curL(), cal = findCal(draft.caliber);
   let list = allBullets().filter(b => {
     const hay = norm(`${b.maker} ${b.name} ${b.caliber} ${b.caliber.replace(/[^0-9a-zа-я]/gi, '')} ${b.mass_gr}gr ${b.mass_gr} ${b.mass_g}г`);
     return words.every(w => hay.includes(w));
   });
-  if (!words.length && caliberHint) {
-    const m = list.filter(b => b.caliber.includes(caliberHint)); if (m.length) list = m;
+  let head = '';
+  if (!words.length && draft.caliber) {
+    const m = list.filter(b => (cal && cal.keys.some(k => b.caliber.includes(k))) || b.caliber === draft.caliber);
+    if (m.length) { list = m; head = `<p class="hint" style="margin:0">Пули под ${esc(draft.caliber)}: ${m.length}. Чтобы искать по всей базе — наберите в поиске.</p>`; }
   }
-  $('#eBres').innerHTML = list.slice(0, 12).map(b => `<button type="button" class="bullet-opt" data-bid="${b.id}" aria-pressed="${b.id === L.bulletId}">
+  $('#eBres').innerHTML = head + list.slice(0, 12).map(b => `<button type="button" class="bullet-opt" data-bid="${b.id}" aria-pressed="${b.id === L.bulletId}">
     <b>${esc(b.maker)} ${b.mass_gr}gr ${esc(b.name)}</b><small>${esc(b.caliber)} · ${b.mass_g} г · G1 ${b.approx ? '≈' : ''}${b.bc_g1}${b.bc_g1_steps ? ' (ступенч.)' : ''}${b.bc_g7 ? ' · G7 ' + (b.approx ? '≈' : '') + b.bc_g7 : ''}${b.note ? '<br>' + esc(b.note) : ''}</small></button>`).join('')
     || '<p class="hint">Ничего не найдено — введите пулю вручную ниже.</p>';
 }
@@ -1077,12 +1101,33 @@ $('#editor').addEventListener('input', e => {
     renderEditor(); return;
   }
   readEditor(); updateSg();
+  if (e.target.id === 'eCal') {
+    const c = findCal(e.target.value);
+    document.querySelectorAll('#calChips .chip').forEach(b => b.setAttribute('aria-pressed', String(!!c && b.dataset.cal === c.name)));
+    if (c && e.inputType === undefined) { $(`#calChips [data-cal="${c.name}"]`)?.click(); return; }   // выбрано из списка
+    renderBulletResults($('#eBq').value);
+  }
   if (e.target.id === 'eLName') $(`#eLoads [data-lid="${curL().id}"]`).textContent = loadLabel(curL());
 });
 $('#editor').addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
   const L = curL();
   if (t.dataset.bid) { readEditor(); L.bulletId = t.dataset.bid; const b = bulletById(t.dataset.bid); L.model = b.bc_g7 ? (L.model || 'G7') : 'G1'; renderEditor(); return; }
+  if (t.dataset.cal) {
+    readEditor();
+    const c = findCal(t.dataset.cal);
+    draft.caliber = c.name;
+    const twistChanged = draft.twistIn !== c.twist;
+    draft.twistIn = c.twist;
+    // пуля другого калибра больше не подходит — сбрасываем, чтобы человек выбрал из подходящих
+    const b = bulletById(curL().bulletId);
+    if (b && !c.keys.some(k => b.caliber.includes(k))) curL().bulletId = '';
+    renderEditor();
+    if (twistChanged) toast(`Подставлен типичный шаг нарезов 1:${c.twist}″ — проверьте в паспорте оружия`);
+    return;
+  }
+  if (t.dataset.click) { readEditor(); draft.click = +t.dataset.click; renderEditor(); return; }
+  if (t.dataset.zero) { readEditor(); draft.zeroM = +t.dataset.zero; renderEditor(); return; }
   if (t.dataset.tw) { readEditor(); draft.twistRight = t.dataset.tw === '1'; renderEditor(); return; }
   if (t.dataset.un) { readEditor(); const was = draft.units; draft.units = t.dataset.un; if (draft.retUnits === was) draft.retUnits = t.dataset.un; draft.click = t.dataset.un === 'MRAD' ? 0.1 : 0.25; if (draft.retUnits !== 'MRAD' && draft.reticle === 'mildot') draft.reticle = 'hash'; renderEditor(); return; }
   if (t.dataset.ret) { readEditor(); draft.reticle = t.dataset.ret; renderEditor(); return; }
