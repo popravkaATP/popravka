@@ -238,6 +238,26 @@ tr.cur td { background: var(--accent-soft); }
 .sensor .acts { display: flex; gap: 8px; }
 .sensor .acts .btn { flex: 1; padding: 13px; }
 .sensor-pic { display: block; margin: 0 auto; width: 150px; height: auto; color: var(--muted); }
+/* Журнал выстрелов */
+.log-list { display: grid; gap: 10px; }
+.log-item { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--paper); display: grid; gap: 4px; border-left: 4px solid var(--line); }
+.log-item.hit { border-left-color: var(--ok); }
+.log-item.miss { border-left-color: var(--bad); }
+.log-item .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.log-item .when { font-size: 12.5px; color: var(--muted); }
+.log-item .head { font: 700 20px/1.1 var(--font-num); }
+.log-item .res { font-weight: 600; }
+.log-item.hit .res { color: var(--ok); }
+.log-item.miss .res { color: var(--bad); }
+.log-item .meta { font-size: 13px; color: var(--muted); }
+.log-item .note { font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.log-item .del { justify-self: end; font-size: 13px; color: var(--muted); }
+.log-sheet { max-height: 92vh; overflow-y: auto; }
+.log-sheet .sum { font-size: 14px; color: var(--muted); }
+.log-sheet .sum b { color: var(--ink); }
+.log-miss { display: grid; gap: 10px; }
+.log-sheet .lrow { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
+.log-sheet .lrow input { width: 90px; flex: none; }
 /* Упреждение, кратность, карточка, патроны */
 .turret.lead { margin-top: 10px; border-left: 4px solid var(--accent); }
 .turret.lead .big { font-size: 38px; }
@@ -256,14 +276,14 @@ body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 
 nav.tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
   background: var(--card); border-top: 1px solid var(--line);
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(4, 1fr);
   padding-bottom: env(safe-area-inset-bottom);
 }
 nav.tabs a { display: grid; justify-items: center; gap: 2px; padding: 9px 4px 10px; text-decoration: none; color: var(--muted); font-size: 12px; font-weight: 600; }
 nav.tabs a svg { width: 24px; height: 24px; }
 nav.tabs a[aria-current="page"] { color: var(--accent); }
 @media (min-width: 880px) {
-  nav.tabs { position: sticky; top: 0; bottom: auto; max-width: 1080px; margin: 0 auto; border: 0; background: transparent; grid-template-columns: repeat(3, max-content); gap: 6px; padding: 14px 16px 0; }
+  nav.tabs { position: sticky; top: 0; bottom: auto; max-width: 1080px; margin: 0 auto; border: 0; background: transparent; grid-template-columns: repeat(4, max-content); gap: 6px; padding: 14px 16px 0; }
   nav.tabs a { grid-auto-flow: column; gap: 8px; padding: 8px 14px; border-radius: 999px; font-size: 14px; border: 1px solid var(--line); background: var(--card); }
   nav.tabs a[aria-current="page"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   body { padding-bottom: 24px; }
@@ -291,6 +311,7 @@ try { if (localStorage.getItem('popravka.night') === '1') document.documentEleme
   <a href="#shot" data-tab="shot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>Выстрел</a>
   <a href="#table" data-tab="table"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 9v11"/></svg>Таблица</a>
   <a href="#rifles" data-tab="rifles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 14h13l3-3h4v3l-4 1-2 3H9l-1 3H5l1-4H2z"/></svg>Винтовки</a>
+  <a href="#log" data-tab="log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h11l3 3v15H5z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>Журнал</a>
 </nav>
 
 <div class="wrap">
@@ -353,6 +374,7 @@ try { if (localStorage.getItem('popravka.night') === '1') document.documentEleme
               <div class="stat"><div class="k">Пуля ниже прицела</div><div class="v num" id="stD">—</div></div>
             </div>
             <div class="alerts" id="alerts"></div>
+            <button class="btn wide" type="button" id="logAdd" style="margin-top:12px">Записать выстрел в журнал</button>
           </div>
 
           <div class="card" id="trueCard">
@@ -460,6 +482,16 @@ try { if (localStorage.getItem('popravka.night') === '1') document.documentEleme
     </div>
   </section>
 
+  <!-- ЖУРНАЛ -->
+  <section class="view" id="view-log" hidden>
+    <div class="card">
+      <h2>Журнал выстрелов</h2>
+      <p class="hint" id="logEmpty" style="margin:0">Записей пока нет. После выстрела нажмите «Записать выстрел в журнал» на экране «Выстрел» — дистанция, поправки и погода запишутся сами, останется отметить результат.</p>
+      <div class="log-list" id="logList"></div>
+      <p class="hint" style="margin:12px 0 0">Журнал хранится только в этом телефоне и сохраняется вместе с профилями в резервную копию («Винтовки» → «Сохранить в файл»).</p>
+    </div>
+  </section>
+
   <!-- ВИНТОВКИ -->
   <section class="view" id="view-rifles" hidden>
     <div class="grid">
@@ -504,6 +536,21 @@ try { if (localStorage.getItem('popravka.night') === '1') document.documentEleme
     <div class="acts"><button class="btn accent" type="button" id="cardShare">Поделиться</button><a class="btn" id="cardDl" href="#" download="popravka.png">Скачать</a><button class="btn" type="button" id="cardClose">Закрыть</button></div>
   </div>
 </div>
+<div class="sensor-back" id="logBack" hidden>
+  <form class="sensor log-sheet form" id="logForm" role="dialog" aria-modal="true" aria-labelledby="logTitle" autocomplete="off" novalidate>
+    <h3 id="logTitle">Запись выстрела</h3>
+    <div class="sum" id="logSum"></div>
+    <div class="f"><label>Результат</label>
+      <div class="seg" role="group" aria-label="Результат"><button type="button" data-lhit="1" aria-pressed="true">Попал</button><button type="button" data-lhit="0" aria-pressed="false">Мимо</button></div></div>
+    <div class="log-miss" id="logMiss" hidden>
+      <span class="hint" style="margin:0">Куда ушла пуля относительно точки прицеливания (если не знаете — оставьте 0):</span>
+      <div class="lrow"><div class="seg" role="group" aria-label="Выше или ниже"><button type="button" data-ldy="1" aria-pressed="false">Выше</button><button type="button" data-ldy="-1" aria-pressed="true">Ниже</button></div><input type="number" inputmode="decimal" id="logDy" min="0" step="any" value="0" aria-label="На сколько сантиметров выше или ниже"><span>см</span></div>
+      <div class="lrow"><div class="seg" role="group" aria-label="Левее или правее"><button type="button" data-ldx="-1" aria-pressed="true">Левее</button><button type="button" data-ldx="1" aria-pressed="false">Правее</button></div><input type="number" inputmode="decimal" id="logDx" min="0" step="any" value="0" aria-label="На сколько сантиметров левее или правее"><span>см</span></div>
+    </div>
+    <div class="f"><label for="logNote">Заметка</label><textarea id="logNote" rows="2" placeholder="Цель, зверь, место…"></textarea></div>
+    <div class="acts"><button class="btn accent" type="submit">Сохранить</button><button class="btn" type="button" id="logCancel">Отмена</button></div>
+  </form>
+</div>
 <div class="sensor-back" id="sensorBack" hidden>
   <div class="sensor" role="dialog" aria-modal="true" aria-labelledby="sensorTitle">
     <h3 id="sensorTitle">Угол на цель</h3>
@@ -544,6 +591,7 @@ try { S = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { S = null; }
 if (!S || !Array.isArray(S.rifles) || !S.rifles.length) S = defaultState();
 S.cond = Object.assign(defaultState().cond, S.cond || {});
 S.custom = S.custom || [];
+S.log = Array.isArray(S.log) ? S.log : [];
 function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {} }
 
 const allBullets = () => BULLET_DB.concat(S.custom);
@@ -778,15 +826,17 @@ function renderClock() {
   $('#windText').textContent = c.windMs > 0 ? `Дует ${CLOCK_TEXT[Math.round(c.windClock) || 12]} (${Math.round(c.windClock)} ч)` : 'Безветрие';
 }
 
+let lastShot = null;
 function computeShot() {
   const r = active(), e = eff(r);
   const { rows, info } = solveR(r, S.distance, S.distance);
   const x = rows[rows.length - 1];
   const u = r.units === 'MRAD' ? 'MRAD' : 'MOA';
   $('#resTitle').textContent = `Поправки на ${S.distance} м`;
-  if (!x) { $('#alerts').innerHTML = `<div class="alert bad">Пуля не долетает до ${S.distance} м при этих условиях.</div>`; return; }
+  if (!x) { lastShot = null; $('#alerts').innerHTML = `<div class="alert bad">Пуля не долетает до ${S.distance} м при этих условиях.</div>`; return; }
 
   const ec = Math.round(x.dropClicks), wc = Math.round(x.sideClicks);
+  lastShot = { ec, wc, u, up: -x.dropAng, side: x.sideAng };
   $('#elevClicks').textContent = Math.abs(ec);
   $('#elevArrow').textContent = ec >= 0 ? '▲' : '▼';
   $('#elevDir').textContent = ec === 0 ? 'не крутить' : `${clicksWord(ec)} ${ec > 0 ? 'вверх' : 'вниз'}`;
@@ -1228,7 +1278,7 @@ $('#addRifle').addEventListener('click', () => openEditor(null));
 // ---------- резервная копия ----------
 // одна и та же копия и для файла, и для текста; старые копии (только rifles + custom) тоже читаются
 function backupData() {
-  return { app: 'popravka', format: 1, saved: new Date().toISOString(), rifles: S.rifles, custom: S.custom, activeId: S.activeId };
+  return { app: 'popravka', format: 1, saved: new Date().toISOString(), rifles: S.rifles, custom: S.custom, activeId: S.activeId, log: S.log };
 }
 function applyBackup(d) {
   if (!d || !Array.isArray(d.rifles) || !d.rifles.length) throw new Error('bad backup');
@@ -1237,8 +1287,9 @@ function applyBackup(d) {
   S.custom = Array.isArray(d.custom) ? d.custom : [];
   S.rifles = d.rifles.map(migrateRifle);
   S.activeId = S.rifles.some(r => r.id === d.activeId) ? d.activeId : S.rifles[0].id;
+  if (Array.isArray(d.log)) S.log = d.log;      // в старых копиях журнала нет — тогда свой не трогаем
   save(); renderRifleList(); renderChip();
-  toast(`Загружено винтовок: ${S.rifles.length}`);
+  toast(`Загружено винтовок: ${S.rifles.length}` + (Array.isArray(d.log) ? `, записей в журнале: ${S.log.length}` : ''));
   return true;
 }
 const blobToB64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
@@ -1686,6 +1737,81 @@ $('#cardShare').addEventListener('click', async () => {
   }
 });
 
+// ---------- журнал выстрелов ----------
+let logDraft = null;
+const signed = (n, plus, minus) => n === 0 ? '0' : `${Math.abs(n)} ${n > 0 ? plus : minus}`;
+function logCondText(c) {
+  const wind = c.windMs ? `ветер ${fmt(c.windMs, c.windMs % 1 ? 1 : 0)} м/с ${CLOCK_TEXT[Math.round(c.windClock)] || ''}` : 'без ветра';
+  return `${fmt(c.temp)} °C · ${fmt(c.pressureMm)} мм · ${wind}` + (c.look ? ` · угол ${c.look}°` : '');
+}
+function clicksText(e) {
+  const v = e.up === 0 ? 'вертикаль 0' : `${Math.abs(e.up)} кл. ${e.up > 0 ? 'вверх' : 'вниз'}`;
+  const h = e.side === 0 ? 'вбок 0' : `${Math.abs(e.side)} кл. ${e.side > 0 ? 'вправо' : 'влево'}`;
+  return `${v}, ${h} (${e.units})`;
+}
+function missText(e) {
+  if (e.hit) return 'Попал';
+  const parts = [];
+  if (e.dy) parts.push(`${lenText(Math.abs(e.dy))} ${e.dy > 0 ? 'выше' : 'ниже'}`);
+  if (e.dx) parts.push(`${lenText(Math.abs(e.dx))} ${e.dx > 0 ? 'правее' : 'левее'}`);
+  return 'Мимо' + (parts.length ? ': ' + parts.join(', ') : '');
+}
+function setSeg(attr, val) { document.querySelectorAll(`[${attr}]`).forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute(attr) === String(val)))); }
+const segVal = attr => Number(document.querySelector(`[${attr}][aria-pressed="true"]`).getAttribute(attr));
+$('#logAdd').addEventListener('click', () => {
+  if (!lastShot) { toast('Нет расчёта для этой дистанции'); return; }
+  const r = active(), c = S.cond;
+  logDraft = {
+    id: 'g' + uid(), t: new Date().toISOString(), rifle: r.name, load: loadLabel(activeLoad(r)),
+    dist: S.distance, up: lastShot.ec, side: lastShot.wc, units: lastShot.u,
+    temp: c.temp, pressureMm: c.pressureMm, humidity: c.humidity, windMs: c.windMs, windClock: c.windClock, look: c.lookDeg,
+  };
+  $('#logSum').innerHTML = `<b>${esc(r.name)}</b> · ${esc(logDraft.load)}<br><b class="num">${logDraft.dist} м</b> · ${clicksText(logDraft)}<br>${logCondText(logDraft)}`;
+  setSeg('data-lhit', 1); setSeg('data-ldy', -1); setSeg('data-ldx', -1);
+  $('#logMiss').hidden = true; $('#logDy').value = 0; $('#logDx').value = 0; $('#logNote').value = '';
+  $('#logBack').hidden = false;
+});
+$('#logForm').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  for (const a of ['data-lhit', 'data-ldy', 'data-ldx']) if (b.hasAttribute(a)) setSeg(a, b.getAttribute(a));
+  if (b.hasAttribute('data-lhit')) $('#logMiss').hidden = b.getAttribute('data-lhit') === '1';
+});
+const closeLog = () => { $('#logBack').hidden = true; logDraft = null; };
+$('#logCancel').addEventListener('click', closeLog);
+$('#logBack').addEventListener('click', e => { if (e.target.id === 'logBack') closeLog(); });
+$('#logForm').addEventListener('submit', e => {
+  e.preventDefault(); if (!logDraft) return;
+  const num = id => { const v = parseFloat(String($(id).value).replace(',', '.')); return isFinite(v) ? Math.abs(v) : 0; };
+  logDraft.hit = segVal('data-lhit') === 1;
+  logDraft.dy = logDraft.hit ? 0 : segVal('data-ldy') * num('#logDy');
+  logDraft.dx = logDraft.hit ? 0 : segVal('data-ldx') * num('#logDx');
+  logDraft.note = $('#logNote').value.trim();
+  S.log.push(logDraft); save(); closeLog();
+  toast(`Записано в журнал (записей: ${S.log.length})`);
+});
+function renderLog() {
+  const list = S.log.slice().reverse();
+  $('#logEmpty').hidden = list.length > 0;
+  $('#logList').innerHTML = list.map(e => {
+    const d = new Date(e.t);
+    const when = isNaN(d) ? '' : d.toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return `<div class="log-item ${e.hit ? 'hit' : 'miss'}">
+      <div class="top"><span class="head num">${e.dist} м</span><span class="when">${when}</span></div>
+      <div class="res">${missText(e)}</div>
+      <div class="meta">${esc(e.rifle || '')} · ${esc(e.load || '')}</div>
+      <div class="meta">${clicksText(e)}</div>
+      <div class="meta">${logCondText(e)}</div>
+      ${e.note ? `<div class="note">${esc(e.note)}</div>` : ''}
+      <button class="link-btn del" type="button" data-logdel="${esc(e.id)}">Удалить</button>
+    </div>`;
+  }).join('');
+}
+$('#logList').addEventListener('click', e => {
+  const b = e.target.closest('[data-logdel]'); if (!b) return;
+  if (!confirm('Удалить эту запись из журнала?')) return;
+  S.log = S.log.filter(x => x.id !== b.dataset.logdel); save(); renderLog();
+});
+
 // ---------- красный ночной режим ----------
 function applyNight(on) {
   document.documentElement.toggleAttribute('data-night', on);
@@ -1702,15 +1828,16 @@ $('#nightBtn').addEventListener('click', () => {
 });
 
 // ---------- навигация ----------
-const route = () => (['shot', 'table', 'rifles'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'shot');
+const route = () => (['shot', 'table', 'rifles', 'log'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'shot');
 function show() {
   const r = route();
-  for (const v of ['shot', 'table', 'rifles']) $('#view-' + v).hidden = v !== r;
+  for (const v of ['shot', 'table', 'rifles', 'log']) $('#view-' + v).hidden = v !== r;
   document.querySelectorAll('nav.tabs a').forEach(a => a.toggleAttribute('aria-current', false));
   document.querySelector(`nav.tabs a[data-tab="${r}"]`).setAttribute('aria-current', 'page');
   if (r === 'shot') computeShot();
   if (r === 'table') computeTable();
   if (r === 'rifles') renderRifleList();
+  if (r === 'log') renderLog();
 }
 window.addEventListener('hashchange', show);
 
