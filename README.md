@@ -1,5 +1,16 @@
 # Поправка — баллистический калькулятор
 
+## 📲 Установить
+
+| Телефон | Ссылка | Как установить |
+|---|---|---|
+| **Android** | [**Скачать popravka.apk**](https://github.com/popravkaATP/popravka/releases/download/latest/popravka.apk) | Открыть скачанный файл → «Установить» (или «Обновить») |
+| **iPhone** | [**popravkaatp.github.io/popravka**](https://popravkaatp.github.io/popravka/) | Открыть в Safari → «Поделиться» → «На экран „Домой“» |
+
+По ссылкам всегда открывается самая свежая версия.
+
+---
+
 Одно приложение в двух видах:
 
 - **APK для Android** — настоящее приложение, ставится на телефон с Android 7 и новее.
