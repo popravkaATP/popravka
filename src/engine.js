@@ -42,7 +42,10 @@ const Ballistics = (() => {
   // shot: {lookDeg, windMs, windClock, lat|null, azDeg}
   function integrate(v0, elev, bullet, a, shot, sightH, maxRange, step, useWind = true, useCor = true, dt = 0.0005) {
     const table = TABLES[bullet.model];
-    const k0 = 0.5 * density(a) * (Math.PI / 4) / (bullet.bc * LB_IN2);
+    const kAir = 0.5 * density(a) * (Math.PI / 4) / LB_IN2;
+    // ступенчатый BC (так его публикует Sierra): [[нижняя граница скорости, м/с, BC], ...] по убыванию скорости
+    const steps = bullet.bcSteps;
+    const bcAt = steps ? (v => { for (const st of steps) if (v >= st[0]) return st[1]; return steps[steps.length - 1][1]; }) : (() => bullet.bc);
     const t0 = a.temp + 273.15, c0 = soundSpeed(a);
     let wx = 0, wz = 0;
     if (useWind && shot.windMs) {
@@ -60,7 +63,7 @@ const Ballistics = (() => {
       const rx = vx - wx, ry = vy, rz = vz - wz;
       const vr = Math.sqrt(rx * rx + ry * ry + rz * rz);
       const ratio = (t0 - 0.0065 * s[1]) / t0;
-      const k = k0 * ratio ** 4.2559, c = c0 * Math.sqrt(ratio);
+      const k = kAir / bcAt(vr) * ratio ** 4.2559, c = c0 * Math.sqrt(ratio);
       const f = k * cd(vr / c, table) * vr;
       o[0] = vx; o[1] = vy; o[2] = vz;
       o[3] = -f * rx - 2 * (oy * vz - oz * vy);
@@ -115,8 +118,9 @@ const Ballistics = (() => {
   const angUnits = (m, d, units) => d <= 0 ? 0 : (units === 'MRAD' ? Math.atan2(m, d) * 1000 : Math.atan2(m, d) * 180 / Math.PI * 60);
 
   // Главная функция. Возвращает строки с поправками.
-  function solve(load, rifle, atmo, shot, maxRange, step, zeroAtmo) {
-    const elev = zeroElevation(load, rifle, zeroAtmo || atmo);
+  // zeroLoad — патрон, которым пристрелян прицел (если стреляем другим патроном).
+  function solve(load, rifle, atmo, shot, maxRange, step, zeroAtmo, zeroLoad) {
+    const elev = zeroElevation(zeroLoad || load, rifle, zeroAtmo || atmo);
     const v0 = velocityAt(load, powderT(atmo));
     const sg = stability(load.bullet, rifle, v0, atmo);
     const c = soundSpeed(atmo);

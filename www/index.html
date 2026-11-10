@@ -227,6 +227,17 @@ tr.cur td { background: var(--accent-soft); }
 .sensor .acts { display: flex; gap: 8px; }
 .sensor .acts .btn { flex: 1; padding: 13px; }
 .sensor-pic { display: block; margin: 0 auto; width: 150px; height: auto; color: var(--muted); }
+/* Упреждение, кратность, карточка, патроны */
+.turret.lead { margin-top: 10px; border-left: 4px solid var(--accent); }
+.turret.lead .big { font-size: 38px; }
+.turret .unit { font-size: 18px; color: var(--muted); font-weight: 600; margin-left: 4px; }
+.mag { display: flex; align-items: center; gap: 10px; margin-top: 8px; color: var(--ink); }
+.mag b { font: 700 22px var(--font-num); min-width: 3ch; text-align: center; }
+.round-btn.sm { width: 36px; height: 36px; font-size: 20px; }
+.load-bar { align-items: center; }
+.card-sheet { max-height: 94vh; overflow: auto; }
+.card-sheet img { width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); display: block; }
+.card-sheet .acts a { text-align: center; text-decoration: none; color: var(--ink); }
 /* Плашка под строкой состояния телефона */
 body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--safe-area-inset-top, env(safe-area-inset-top)); background: var(--paper); z-index: 30; pointer-events: none; }
 /* Нижняя навигация */
@@ -253,6 +264,7 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
 .toast.show { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
+<script src="./capacitor.js"></script>
 </head>
 <body>
 
@@ -278,6 +290,7 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
         <span>Сейчас открыт пример винтовки. Добавьте свою — и поправки будут точными.</span>
         <a href="#rifles">Добавить винтовку →</a>
       </div>
+      <div class="chips load-bar" id="loadBar" hidden></div>
       <div class="grid">
         <div class="stack">
           <div class="card">
@@ -308,6 +321,7 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
                 <div class="sub num" id="windSub">—</div>
               </div>
             </div>
+            <div class="turret lead" id="leadBox" hidden></div>
             <div class="reticle-box">
               <div id="reticle" aria-hidden="true"></div>
               <div class="reticle-note" id="reticleNote"></div>
@@ -379,6 +393,21 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
             </div>
           </div>
 
+          <details class="more" id="moveBox">
+            <summary>Движущаяся цель</summary>
+            <div class="stack">
+              <label class="switch"><input type="checkbox" id="mvOn"> Цель движется — посчитать упреждение</label>
+              <div class="stack" id="mvFields" hidden>
+                <div class="field"><label for="mvKmh">Скорость цели</label><div class="stepper" data-for="mvKmh" data-step="1"><button type="button" data-d="-1" aria-label="Меньше">−</button><span class="inp"><input id="mvKmh" type="number" inputmode="decimal" min="0" max="120"><span class="u">км/ч</span></span><button type="button" data-d="1" aria-label="Больше">+</button></div></div>
+                <div class="chips" id="mvPresets">
+                  <button type="button" class="chip" data-kmh="5">5 · шагом</button><button type="button" class="chip" data-kmh="15">15 · рысью</button><button type="button" class="chip" data-kmh="30">30 · бегом</button><button type="button" class="chip" data-kmh="50">50 · быстро</button>
+                </div>
+                <div class="field"><label>Куда движется</label><div class="seg" role="group" aria-label="Направление движения цели"><button type="button" data-mvdir="-1">← Влево</button><button type="button" data-mvdir="1">Вправо →</button></div></div>
+                <div class="field"><label>Как идёт относительно вас</label><div class="seg" role="group" aria-label="Угол движения"><button type="button" data-mvang="90">Поперёк</button><button type="button" data-mvang="45">Наискосок</button><button type="button" data-mvang="20">Почти на вас</button></div></div>
+                <p class="hint" style="margin:0">Упреждение показывается отдельно и учтено в точке на сетке. Барабаны под него обычно не крутят — выносят точку прицеливания по ходу цели.</p>
+              </div>
+            </div>
+          </details>
           <details class="more" id="moreBox">
             <summary>Дополнительно: порох, вращение Земли</summary>
             <div class="stack">
@@ -407,6 +436,7 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
       </div>
       <div class="tbl-wrap"><table id="tbl"></table></div>
       <p class="legend" id="tblLegend"></p>
+      <button class="btn primary wide" type="button" id="cardBtn" style="margin-top:12px">Карточка поправок — картинкой</button>
     </div>
   </section>
 
@@ -439,6 +469,14 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
   </section>
 </div>
 <div class="toast" id="toast" role="status"></div>
+<div class="sensor-back" id="cardBack" hidden>
+  <div class="sensor card-sheet" role="dialog" aria-modal="true" aria-labelledby="cardTitle">
+    <h3 id="cardTitle">Карточка поправок</h3>
+    <img id="cardImg" alt="Карточка поправок">
+    <p class="hint" style="margin:0">Отправьте в мессенджер, сохраните в галерею или распечатайте. Если кнопка не сработает — нажмите на картинку и удерживайте.</p>
+    <div class="acts"><button class="btn accent" type="button" id="cardShare">Поделиться</button><a class="btn" id="cardDl" href="#" download="popravka.png">Скачать</a><button class="btn" type="button" id="cardClose">Закрыть</button></div>
+  </div>
+</div>
 <div class="sensor-back" id="sensorBack" hidden>
   <div class="sensor" role="dialog" aria-modal="true" aria-labelledby="sensorTitle">
     <h3 id="sensorTitle">Угол на цель</h3>
@@ -495,7 +533,10 @@ const Ballistics = (() => {
   // shot: {lookDeg, windMs, windClock, lat|null, azDeg}
   function integrate(v0, elev, bullet, a, shot, sightH, maxRange, step, useWind = true, useCor = true, dt = 0.0005) {
     const table = TABLES[bullet.model];
-    const k0 = 0.5 * density(a) * (Math.PI / 4) / (bullet.bc * LB_IN2);
+    const kAir = 0.5 * density(a) * (Math.PI / 4) / LB_IN2;
+    // ступенчатый BC (так его публикует Sierra): [[нижняя граница скорости, м/с, BC], ...] по убыванию скорости
+    const steps = bullet.bcSteps;
+    const bcAt = steps ? (v => { for (const st of steps) if (v >= st[0]) return st[1]; return steps[steps.length - 1][1]; }) : (() => bullet.bc);
     const t0 = a.temp + 273.15, c0 = soundSpeed(a);
     let wx = 0, wz = 0;
     if (useWind && shot.windMs) {
@@ -513,7 +554,7 @@ const Ballistics = (() => {
       const rx = vx - wx, ry = vy, rz = vz - wz;
       const vr = Math.sqrt(rx * rx + ry * ry + rz * rz);
       const ratio = (t0 - 0.0065 * s[1]) / t0;
-      const k = k0 * ratio ** 4.2559, c = c0 * Math.sqrt(ratio);
+      const k = kAir / bcAt(vr) * ratio ** 4.2559, c = c0 * Math.sqrt(ratio);
       const f = k * cd(vr / c, table) * vr;
       o[0] = vx; o[1] = vy; o[2] = vz;
       o[3] = -f * rx - 2 * (oy * vz - oz * vy);
@@ -568,8 +609,9 @@ const Ballistics = (() => {
   const angUnits = (m, d, units) => d <= 0 ? 0 : (units === 'MRAD' ? Math.atan2(m, d) * 1000 : Math.atan2(m, d) * 180 / Math.PI * 60);
 
   // Главная функция. Возвращает строки с поправками.
-  function solve(load, rifle, atmo, shot, maxRange, step, zeroAtmo) {
-    const elev = zeroElevation(load, rifle, zeroAtmo || atmo);
+  // zeroLoad — патрон, которым пристрелян прицел (если стреляем другим патроном).
+  function solve(load, rifle, atmo, shot, maxRange, step, zeroAtmo, zeroLoad) {
+    const elev = zeroElevation(zeroLoad || load, rifle, zeroAtmo || atmo);
     const v0 = velocityAt(load, powderT(atmo));
     const sg = stability(load.bullet, rifle, v0, atmo);
     const c = soundSpeed(atmo);
@@ -595,7 +637,7 @@ const Ballistics = (() => {
 
 </script>
 <script>
-const BULLET_DB = [{"id": "sierra-224-77-smk", "maker": "Sierra", "name": "MatchKing HPBT #9377", "caliber": ".223 / 5.56", "diameter_mm": 5.69, "mass_gr": 77, "mass_g": 4.99, "bc_g1": 0.372, "bc_g7": 0.182, "length_mm": 25.3, "min_twist_in": 8}, {"id": "hornady-224-75-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".223 / 5.56", "diameter_mm": 5.69, "mass_gr": 75, "mass_g": 4.86, "bc_g1": 0.467, "bc_g7": 0.235, "length_mm": 26.9, "min_twist_in": 8}, {"id": "hornady-224-80-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".223 / 5.56", "diameter_mm": 5.69, "mass_gr": 80, "mass_g": 5.18, "bc_g1": 0.485, "bc_g7": 0.244, "length_mm": 27.9, "min_twist_in": 7}, {"id": "hornady-224-88-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".22 (.224)", "diameter_mm": 5.69, "mass_gr": 88, "mass_g": 5.7, "bc_g1": 0.545, "bc_g7": 0.274, "length_mm": 29.2, "min_twist_in": 7}, {"id": "hornady-243-108-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": "6mm (.243)", "diameter_mm": 6.17, "mass_gr": 108, "mass_g": 7.0, "bc_g1": 0.536, "bc_g7": 0.27, "length_mm": 31.2, "min_twist_in": 8}, {"id": "hornady-264-140-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": "6.5mm (.264)", "diameter_mm": 6.71, "mass_gr": 140, "mass_g": 9.07, "bc_g1": 0.646, "bc_g7": 0.326, "length_mm": 35.3, "min_twist_in": 8}, {"id": "hornady-264-147-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": "6.5mm (.264)", "diameter_mm": 6.71, "mass_gr": 147, "mass_g": 9.53, "bc_g1": 0.697, "bc_g7": 0.351, "length_mm": 36.3, "min_twist_in": 8}, {"id": "hornady-264-143-eldx", "maker": "Hornady", "name": "ELD-X", "caliber": "6.5mm (.264)", "diameter_mm": 6.71, "mass_gr": 143, "mass_g": 9.27, "bc_g1": 0.623, "bc_g7": 0.314, "length_mm": 34.8, "min_twist_in": 8}, {"id": "lapua-264-123-scenar", "maker": "Lapua", "name": "Scenar OTM", "caliber": "6.5mm (.264)", "diameter_mm": 6.71, "mass_gr": 123, "mass_g": 7.97, "bc_g1": 0.545, "bc_g7": 0.274, "length_mm": 32.0, "min_twist_in": null}, {"id": "lapua-264-136-scenarl", "maker": "Lapua", "name": "Scenar-L OTM", "caliber": "6.5mm (.264)", "diameter_mm": 6.71, "mass_gr": 136, "mass_g": 8.81, "bc_g1": 0.578, "bc_g7": 0.29, "length_mm": 33.8, "min_twist_in": null}, {"id": "hornady-284-162-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": "7mm (.284)", "diameter_mm": 7.21, "mass_gr": 162, "mass_g": 10.5, "bc_g1": 0.67, "bc_g7": 0.338, "length_mm": 36.3, "min_twist_in": null}, {"id": "sierra-284-175-smk", "maker": "Sierra", "name": "MatchKing HPBT #1975", "caliber": "7mm (.284)", "diameter_mm": 7.21, "mass_gr": 175, "mass_g": 11.34, "bc_g1": 0.608, "bc_g7": 0.302, "length_mm": 36.3, "min_twist_in": 8.5}, {"id": "sierra-308-168-smk", "maker": "Sierra", "name": "MatchKing HPBT #2200", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 168, "mass_g": 10.89, "bc_g1": 0.462, "bc_g7": null, "length_mm": 30.9, "min_twist_in": null}, {"id": "sierra-308-175-smk", "maker": "Sierra", "name": "MatchKing HPBT #2275", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 175, "mass_g": 11.34, "bc_g1": 0.505, "bc_g7": 0.25, "length_mm": 31.5, "min_twist_in": null}, {"id": "hornady-308-168-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 168, "mass_g": 10.89, "bc_g1": 0.523, "bc_g7": 0.263, "length_mm": 32.3, "min_twist_in": null}, {"id": "hornady-308-178-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 178, "mass_g": 11.53, "bc_g1": 0.547, "bc_g7": 0.275, "length_mm": 34.5, "min_twist_in": null}, {"id": "hornady-308-208-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 208, "mass_g": 13.48, "bc_g1": 0.69, "bc_g7": 0.348, "length_mm": 38.1, "min_twist_in": null}, {"id": "hornady-308-225-eldm", "maker": "Hornady", "name": "ELD Match (твист 1:10)", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 225, "mass_g": 14.58, "bc_g1": 0.777, "bc_g7": 0.391, "length_mm": 39.4, "min_twist_in": 10}, {"id": "lapua-308-155-scenar", "maker": "Lapua", "name": "Scenar OTM GB491", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 155, "mass_g": 10.04, "bc_g1": 0.46, "bc_g7": 0.23, "length_mm": 30.5, "min_twist_in": null}, {"id": "lapua-308-167-scenar", "maker": "Lapua", "name": "Scenar OTM GB422", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 167, "mass_g": 10.82, "bc_g1": 0.446, "bc_g7": 0.223, "length_mm": 31.0, "min_twist_in": 12}, {"id": "lapua-308-185-scenar", "maker": "Lapua", "name": "Scenar OTM GB432", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 185, "mass_g": 11.99, "bc_g1": 0.482, "bc_g7": 0.242, "length_mm": 33.8, "min_twist_in": null}, {"id": "lapua-338-250-scenar", "maker": "Lapua", "name": "Scenar OTM GB488", "caliber": ".338", "diameter_mm": 8.59, "mass_gr": 250, "mass_g": 16.2, "bc_g1": 0.648, "bc_g7": 0.322, "length_mm": 39.6, "min_twist_in": null}, {"id": "hornady-338-285-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".338", "diameter_mm": 8.59, "mass_gr": 285, "mass_g": 18.47, "bc_g1": 0.829, "bc_g7": 0.417, "length_mm": 44.4, "min_twist_in": null}, {"id": "mil-7n1", "maker": "7Н1", "name": "снайперская (СВД)", "caliber": "7,62×54R", "diameter_mm": 7.92, "mass_gr": 151.2, "mass_g": 9.8, "bc_g1": 0.411, "bc_g7": 0.206, "length_mm": 33.5, "min_twist_in": null, "approx": true, "note": "BC — оценка по открытым источникам; уточните по попаданиям"}, {"id": "mil-lps", "maker": "ЛПС 57-Н-323С", "name": "со стальным сердечником", "caliber": "7,62×54R", "diameter_mm": 7.92, "mass_gr": 148.2, "mass_g": 9.6, "bc_g1": 0.374, "bc_g7": 0.187, "length_mm": 32.5, "min_twist_in": null, "approx": true, "note": "BC — оценка по открытым источникам; уточните по попаданиям"}, {"id": "sierra-311-174-smk", "maker": "Sierra", "name": "MatchKing HPBT #2315", "caliber": "7,62×54R / .303 (.311)", "diameter_mm": 7.9, "mass_gr": 174, "mass_g": 11.28, "bc_g1": 0.499, "bc_g7": null, "length_mm": 31.2, "min_twist_in": null}, {"id": "lapua-310-200-d166", "maker": "Lapua", "name": "D166 FMJBT", "caliber": "7,62×54R (.310)", "diameter_mm": 7.87, "mass_gr": 200, "mass_g": 13.0, "bc_g1": 0.448, "bc_g7": 0.224, "length_mm": 33.0, "min_twist_in": null}, {"id": "mil-7n6", "maker": "7Н6", "name": "ПС, стальной сердечник", "caliber": "5,45×39", "diameter_mm": 5.62, "mass_gr": 52.9, "mass_g": 3.43, "bc_g1": 0.339, "bc_g7": 0.168, "length_mm": 25.5, "min_twist_in": null, "approx": true, "note": "G7 измерен BRL (США); G1 — пересчёт"}, {"id": "mil-7n10", "maker": "7Н10", "name": "повышенной пробиваемости", "caliber": "5,45×39", "diameter_mm": 5.62, "mass_gr": 55.9, "mass_g": 3.62, "bc_g1": 0.351, "bc_g7": 0.176, "length_mm": 25.5, "min_twist_in": null, "approx": true, "note": "BC — оценка по открытым источникам; уточните по попаданиям"}, {"id": "mil-57n231", "maker": "57-Н-231 (М43)", "name": "ПС, стальной сердечник", "caliber": "7,62×39", "diameter_mm": 7.92, "mass_gr": 121.9, "mass_g": 7.9, "bc_g1": 0.309, "bc_g7": 0.155, "length_mm": 26.8, "min_twist_in": null, "approx": true, "note": "G7 близок к измеренному на Абердинском полигоне (0,156)"}];
+const BULLET_DB = [{"id": "sierra-224-77-smk", "maker": "Sierra", "name": "MatchKing HPBT #9377", "caliber": ".223 / 5.56", "diameter_mm": 5.69, "mass_gr": 77, "mass_g": 4.99, "bc_g1": 0.372, "bc_g7": 0.182, "length_mm": 25.3, "min_twist_in": 8, "bc_g1_steps": [[3000, 0.372], [2500, 0.362], [1700, 0.362], [0, 0.343]]}, {"id": "hornady-224-75-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".223 / 5.56", "diameter_mm": 5.69, "mass_gr": 75, "mass_g": 4.86, "bc_g1": 0.467, "bc_g7": 0.235, "length_mm": 26.9, "min_twist_in": 8}, {"id": "hornady-224-80-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".223 / 5.56", "diameter_mm": 5.69, "mass_gr": 80, "mass_g": 5.18, "bc_g1": 0.485, "bc_g7": 0.244, "length_mm": 27.9, "min_twist_in": 7}, {"id": "hornady-224-88-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".22 (.224)", "diameter_mm": 5.69, "mass_gr": 88, "mass_g": 5.7, "bc_g1": 0.545, "bc_g7": 0.274, "length_mm": 29.2, "min_twist_in": 7}, {"id": "hornady-243-108-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": "6mm (.243)", "diameter_mm": 6.17, "mass_gr": 108, "mass_g": 7.0, "bc_g1": 0.536, "bc_g7": 0.27, "length_mm": 31.2, "min_twist_in": 8}, {"id": "hornady-264-140-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": "6.5mm (.264)", "diameter_mm": 6.71, "mass_gr": 140, "mass_g": 9.07, "bc_g1": 0.646, "bc_g7": 0.326, "length_mm": 35.3, "min_twist_in": 8}, {"id": "hornady-264-147-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": "6.5mm (.264)", "diameter_mm": 6.71, "mass_gr": 147, "mass_g": 9.53, "bc_g1": 0.697, "bc_g7": 0.351, "length_mm": 36.3, "min_twist_in": 8}, {"id": "hornady-264-143-eldx", "maker": "Hornady", "name": "ELD-X", "caliber": "6.5mm (.264)", "diameter_mm": 6.71, "mass_gr": 143, "mass_g": 9.27, "bc_g1": 0.623, "bc_g7": 0.314, "length_mm": 34.8, "min_twist_in": 8}, {"id": "lapua-264-123-scenar", "maker": "Lapua", "name": "Scenar OTM", "caliber": "6.5mm (.264)", "diameter_mm": 6.71, "mass_gr": 123, "mass_g": 7.97, "bc_g1": 0.545, "bc_g7": 0.274, "length_mm": 32.0, "min_twist_in": null}, {"id": "lapua-264-136-scenarl", "maker": "Lapua", "name": "Scenar-L OTM", "caliber": "6.5mm (.264)", "diameter_mm": 6.71, "mass_gr": 136, "mass_g": 8.81, "bc_g1": 0.578, "bc_g7": 0.29, "length_mm": 33.8, "min_twist_in": null}, {"id": "hornady-284-162-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": "7mm (.284)", "diameter_mm": 7.21, "mass_gr": 162, "mass_g": 10.5, "bc_g1": 0.67, "bc_g7": 0.338, "length_mm": 36.3, "min_twist_in": null}, {"id": "sierra-284-175-smk", "maker": "Sierra", "name": "MatchKing HPBT #1975", "caliber": "7mm (.284)", "diameter_mm": 7.21, "mass_gr": 175, "mass_g": 11.34, "bc_g1": 0.608, "bc_g7": 0.302, "length_mm": 36.3, "min_twist_in": 8.5, "bc_g1_steps": [[2100, 0.608], [1530, 0.582], [1300, 0.532], [0, 0.5]]}, {"id": "sierra-308-168-smk", "maker": "Sierra", "name": "MatchKing HPBT #2200", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 168, "mass_g": 10.89, "bc_g1": 0.462, "bc_g7": null, "length_mm": 30.9, "min_twist_in": null, "bc_g1_steps": [[2600, 0.462], [2100, 0.447], [1600, 0.424], [0, 0.405]]}, {"id": "sierra-308-175-smk", "maker": "Sierra", "name": "MatchKing HPBT #2275", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 175, "mass_g": 11.34, "bc_g1": 0.505, "bc_g7": 0.25, "length_mm": 31.5, "min_twist_in": null, "bc_g1_steps": [[2800, 0.505], [1800, 0.496], [0, 0.485]]}, {"id": "hornady-308-168-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 168, "mass_g": 10.89, "bc_g1": 0.523, "bc_g7": 0.263, "length_mm": 32.3, "min_twist_in": null}, {"id": "hornady-308-178-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 178, "mass_g": 11.53, "bc_g1": 0.547, "bc_g7": 0.275, "length_mm": 34.5, "min_twist_in": null}, {"id": "hornady-308-208-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 208, "mass_g": 13.48, "bc_g1": 0.69, "bc_g7": 0.348, "length_mm": 38.1, "min_twist_in": null}, {"id": "hornady-308-225-eldm", "maker": "Hornady", "name": "ELD Match (твист 1:10)", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 225, "mass_g": 14.58, "bc_g1": 0.777, "bc_g7": 0.391, "length_mm": 39.4, "min_twist_in": 10}, {"id": "lapua-308-155-scenar", "maker": "Lapua", "name": "Scenar OTM GB491", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 155, "mass_g": 10.04, "bc_g1": 0.46, "bc_g7": 0.23, "length_mm": 30.5, "min_twist_in": null}, {"id": "lapua-308-167-scenar", "maker": "Lapua", "name": "Scenar OTM GB422", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 167, "mass_g": 10.82, "bc_g1": 0.446, "bc_g7": 0.223, "length_mm": 31.0, "min_twist_in": 12}, {"id": "lapua-308-185-scenar", "maker": "Lapua", "name": "Scenar OTM GB432", "caliber": ".308 (7.62)", "diameter_mm": 7.82, "mass_gr": 185, "mass_g": 11.99, "bc_g1": 0.482, "bc_g7": 0.242, "length_mm": 33.8, "min_twist_in": null}, {"id": "lapua-338-250-scenar", "maker": "Lapua", "name": "Scenar OTM GB488", "caliber": ".338", "diameter_mm": 8.59, "mass_gr": 250, "mass_g": 16.2, "bc_g1": 0.648, "bc_g7": 0.322, "length_mm": 39.6, "min_twist_in": null}, {"id": "hornady-338-285-eldm", "maker": "Hornady", "name": "ELD Match", "caliber": ".338", "diameter_mm": 8.59, "mass_gr": 285, "mass_g": 18.47, "bc_g1": 0.829, "bc_g7": 0.417, "length_mm": 44.4, "min_twist_in": null}, {"id": "mil-7n1", "maker": "7Н1", "name": "снайперская (СВД)", "caliber": "7,62×54R", "diameter_mm": 7.92, "mass_gr": 151.2, "mass_g": 9.8, "bc_g1": 0.411, "bc_g7": 0.206, "length_mm": 33.5, "min_twist_in": null, "approx": true, "note": "BC — оценка по открытым источникам; уточните по попаданиям"}, {"id": "mil-lps", "maker": "ЛПС 57-Н-323С", "name": "со стальным сердечником", "caliber": "7,62×54R", "diameter_mm": 7.92, "mass_gr": 148.2, "mass_g": 9.6, "bc_g1": 0.374, "bc_g7": 0.187, "length_mm": 32.5, "min_twist_in": null, "approx": true, "note": "BC — оценка по открытым источникам; уточните по попаданиям"}, {"id": "sierra-311-174-smk", "maker": "Sierra", "name": "MatchKing HPBT #2315", "caliber": "7,62×54R / .303 (.311)", "diameter_mm": 7.9, "mass_gr": 174, "mass_g": 11.28, "bc_g1": 0.499, "bc_g7": null, "length_mm": 31.2, "min_twist_in": null, "bc_g1_steps": [[2200, 0.499], [1800, 0.493], [0, 0.48]]}, {"id": "lapua-310-200-d166", "maker": "Lapua", "name": "D166 FMJBT", "caliber": "7,62×54R (.310)", "diameter_mm": 7.87, "mass_gr": 200, "mass_g": 13.0, "bc_g1": 0.448, "bc_g7": 0.224, "length_mm": 33.0, "min_twist_in": null}, {"id": "mil-7n6", "maker": "7Н6", "name": "ПС, стальной сердечник", "caliber": "5,45×39", "diameter_mm": 5.62, "mass_gr": 52.9, "mass_g": 3.43, "bc_g1": 0.339, "bc_g7": 0.168, "length_mm": 25.5, "min_twist_in": null, "approx": true, "note": "G7 измерен BRL (США); G1 — пересчёт"}, {"id": "mil-7n10", "maker": "7Н10", "name": "повышенной пробиваемости", "caliber": "5,45×39", "diameter_mm": 5.62, "mass_gr": 55.9, "mass_g": 3.62, "bc_g1": 0.351, "bc_g7": 0.176, "length_mm": 25.5, "min_twist_in": null, "approx": true, "note": "BC — оценка по открытым источникам; уточните по попаданиям"}, {"id": "mil-57n231", "maker": "57-Н-231 (М43)", "name": "ПС, стальной сердечник", "caliber": "7,62×39", "diameter_mm": 7.92, "mass_gr": 121.9, "mass_g": 7.9, "bc_g1": 0.309, "bc_g7": 0.155, "length_mm": 26.8, "min_twist_in": null, "approx": true, "note": "G7 близок к измеренному на Абердинском полигоне (0,156)"}];
 
 // ---------- состояние ----------
 const STORE_KEY = 'popravka.v1';
@@ -611,7 +653,7 @@ function defaultState() {
       zeroM: 100, zero: { temp: 15, pressureMm: 760, humidity: 50 },
     }],
     activeId: 'example',
-    cond: { temp: 15, pressureMm: 760, humidity: 50, lookDeg: 0, windMs: 3, windClock: 3, powderOn: false, powderTemp: 15, cor: false, lat: 43, az: 0 },
+    cond: { temp: 15, pressureMm: 760, humidity: 50, lookDeg: 0, windMs: 3, windClock: 3, powderOn: false, powderTemp: 15, cor: false, lat: 43, az: 0, moveOn: false, moveKmh: 10, moveDir: 1, moveAng: 90 },
     distance: 500, tableMax: 1000, tableStep: 100, custom: [],
   };
 }
@@ -643,11 +685,58 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 function engineObjects(r) {
   const b = bulletById(r.bulletId) || BULLET_DB[0];
   const model = (r.model === 'G7' && b.bc_g7) ? 'G7' : 'G1';
-  const bullet = { bc: (model === 'G7' ? b.bc_g7 : b.bc_g1) * (r.bcScale || 1), model, massG: b.mass_g, diaMm: b.diameter_mm, lenMm: b.length_mm };
+  const scale = r.bcScale || 1;
+  const bullet = { bc: (model === 'G7' ? b.bc_g7 : b.bc_g1) * scale, model, massG: b.mass_g, diaMm: b.diameter_mm, lenMm: b.length_mm };
+  // ступенчатый BC (Sierra): на разных скоростях — свой BC
+  if (model === 'G1' && Array.isArray(b.bc_g1_steps)) bullet.bcSteps = b.bc_g1_steps.map(([fps, bc]) => [fps * 0.3048, bc * scale]);
   const load = { bullet, v0: r.v0, powderRefTemp: r.powderRefTemp, powderSens: r.powderSens };
   const rifle = { sightCm: r.sightCm, twistIn: r.twistIn, twistRight: r.twistRight, zeroM: r.zeroM, click: r.click, units: r.units };
   return { b, load, rifle };
 }
+
+// ---------- патроны винтовки ----------
+// У винтовки может быть несколько патронов. Прицел пристрелян одним из них (zeroLoadId);
+// для остальных расчёт учитывает, что при той же установке прицела они летят иначе.
+const LOAD_KEYS = ['bulletId', 'model', 'v0', 'powderRefTemp', 'powderSens', 'bcScale', 'trued'];
+function migrateRifle(r) {
+  if (!Array.isArray(r.loads) || !r.loads.length) {
+    const l = { id: 'l' + uid() };
+    for (const k of LOAD_KEYS) if (k in r) { l[k] = r[k]; delete r[k]; }
+    if (l.model == null) l.model = 'G7';
+    if (l.v0 == null) l.v0 = 800;
+    if (l.powderRefTemp == null) l.powderRefTemp = 15;
+    if (l.powderSens == null) l.powderSens = 0;
+    if (l.bulletId == null) l.bulletId = '';
+    r.loads = [l];
+  }
+  if (!r.loads.find(l => l.id === r.activeLoadId)) r.activeLoadId = r.loads[0].id;
+  if (!r.loads.find(l => l.id === r.zeroLoadId)) r.zeroLoadId = r.loads[0].id;
+  r.reticle = r.reticle || 'hash';
+  r.retUnits = r.retUnits || r.units || 'MRAD';
+  r.focal = r.focal || 'FFP';
+  r.sfpMag = r.sfpMag || 10;
+  r.curMag = r.curMag || r.sfpMag;
+  return r;
+}
+S.rifles.forEach(migrateRifle);
+const activeLoad = r => r.loads.find(l => l.id === r.activeLoadId) || r.loads[0];
+const zeroLoadOf = r => r.loads.find(l => l.id === r.zeroLoadId) || r.loads[0];
+// «плоский» вид: поля винтовки + поля патрона — так с ним работает расчёт
+function eff(r, L = activeLoad(r)) { const { id, name, ...rest } = L; return Object.assign({}, r, rest, { loadName: name || '' }); }
+function loadLabel(L) {
+  const b = bulletById(L.bulletId);
+  return L.name || (b ? `${b.maker} ${b.mass_gr}gr` : 'Патрон без пули');
+}
+// расчёт для винтовки с учётом пристрелочного патрона; opt.load — временные правки патрона (для уточнения)
+function solveR(r, maxR, step, opt = {}) {
+  const base = activeLoad(r);
+  const L = Object.assign({}, base, opt.load || {});
+  const zl = zeroLoadOf(r);
+  const Z = zl.id === base.id ? L : zl;
+  const A = engineObjects(eff(r, L)), Zo = engineObjects(eff(r, Z));
+  return Ballistics.solve(A.load, A.rifle, opt.atmo || atmoNow(), opt.shot || shotNow(), maxR, step, atmoZero(r), Zo.load);
+}
+
 function atmoNow() {
   const c = S.cond;
   return { temp: c.temp, pressureHpa: c.pressureMm * MM_TO_HPA, humidity: c.humidity, powderTemp: c.powderOn ? c.powderTemp : null };
@@ -660,9 +749,10 @@ function shotNow() {
 
 // ---------- шапка ----------
 function renderChip() {
-  const r = active(), b = bulletById(r.bulletId);
+  const r = active(), e = eff(r), b = bulletById(e.bulletId);
   $('#chipName').textContent = r.name;
-  $('#chipSub').textContent = `${b ? b.maker + ' ' + b.mass_gr + 'gr' : 'пуля?'} · ${r.v0} м/с · пристрелка ${r.zeroM} м`;
+  $('#chipSub').textContent = `${b ? b.maker + ' ' + b.mass_gr + 'gr' : 'пуля?'} · ${e.v0} м/с · пристрелка ${r.zeroM} м`;
+  renderLoadBar();
   $('#chipDot').textContent = (r.caliber.match(/[\d.,]+/) || ['•'])[0].replace(/^\./, '').slice(0, 4);
   $('#exampleNote').hidden = !r.example;
 }
@@ -688,35 +778,98 @@ function setDistance(d, fromKeyboard = false) {
   if (changed) schedule();
 }
 
-function reticleSVG(holdX, holdY, units) {
-  // holdX/holdY — точка прицеливания в единицах прицела (+вправо, +вверх)
-  const need = Math.max(Math.abs(holdX), Math.abs(holdY));
-  const steps = units === 'MRAD' ? [1, 2, 5, 10, 20, 50, 100] : [2, 5, 10, 20, 50, 100, 200, 500];
-  // не больше 10 делений на полуось — иначе цифры слипаются
-  const unitStep = steps.find(st => Math.ceil((need + st) / st) <= 10) || steps[steps.length - 1];
-  const span = Math.max(unitStep * 5, Math.ceil((need + unitStep) / unitStep) * unitStep);
-  reticleSVG.lastStep = unitStep;
-  const R = 92, k = R / span, cx = 100, cy = 100;
-  let ticks = '';
-  for (let i = unitStep; i <= span; i += unitStep) {
-    const p = i * k, big = Math.round(i / unitStep) % 5 === 0;
-    const l = big ? 7 : 4;
-    ticks += `<path d="M${cx + p} ${cy - l}V${cy + l}M${cx - p} ${cy - l}V${cy + l}M${cx - l} ${cy + p}H${cx + l}M${cx - l} ${cy - p}H${cx + l}"/>`;
-    if (big && p < R - 8) ticks += `<text x="${cx + p}" y="${cy - 10}" text-anchor="middle" stroke="none">${i}</text>`;
+// ---------- сетка прицела ----------
+const MOA_PER_MRAD = 3.43775;
+const RETICLES = { hash: 'С делениями', mildot: 'Mil-Dot', tree: 'Ёлочка', duplex: 'Без делений' };
+// угол в единицах барабанов → деления сетки (учитываем единицы сетки и кратность для SFP)
+function toRetDivs(r, ang) {
+  let a = ang;
+  if (r.units !== r.retUnits) a = r.units === 'MRAD' ? a * MOA_PER_MRAD : a / MOA_PER_MRAD;
+  if (r.focal === 'SFP' && r.reticle !== 'duplex') a = a * (r.curMag / r.sfpMag);
+  return a;
+}
+// Рисует сетку и точку прицеливания. holdX/holdY — в делениях сетки (+вправо, +вверх).
+function reticleSVG(holdX, holdY, type, units) {
+  const R = 92, cx = 100;
+  const isTree = type === 'tree';
+  const cy = isTree ? 64 : 100;
+  let k, body = '', step = 1, note = '';
+  const dot = (x, y, r0 = 1.6) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r0}" fill="var(--ink)" stroke="none"/>`;
+  const posts = inner => {
+    const w = 5;
+    return `<path d="M${cx - R - 6} ${cy}H${cx - inner}M${cx + inner} ${cy}H${cx + R + 6}M${cx} ${cy + inner}V${200}" stroke-width="${w}" stroke="var(--ink)"/>` +
+      (isTree ? '' : `<path d="M${cx} 0V${cy - inner}" stroke-width="${w}" stroke="var(--ink)"/>`);
+  };
+  if (type === 'mildot') {
+    const span = units === 'MRAD' ? 6 : 20; step = units === 'MRAD' ? 1 : 4;
+    k = R / span;
+    for (let i = step; i <= step * 4 + 1e-9; i += step) {
+      const p = i * k;
+      body += dot(cx + p, cy, 2.2) + dot(cx - p, cy, 2.2) + dot(cx, cy + p, 2.2) + dot(cx, cy - p, 2.2);
+    }
+    body += posts(step * 5 * k);
+    note = `Точки через ${step} ${units}.`;
+  } else if (type === 'tree') {
+    step = units === 'MRAD' ? 1 : 2;
+    k = units === 'MRAD' ? 8 : 8 / MOA_PER_MRAD;
+    const lbl = units === 'MRAD' ? 5 : 10;
+    for (let i = step; i * k < R + 40; i += step) {           // ряды ниже центра
+      const y = cy + i * k, half = Math.min(12, 1 + Math.floor((i / step) * 0.6));
+      for (let m = -half; m <= half; m++) if (m !== 0) body += dot(cx + m * step * k, y, 1.15);
+      body += `<path d="M${cx - 3} ${y}H${cx + 3}"/>`;
+      if (Math.round(i / step) % (lbl / step) === 0) body += `<text x="${cx - half * step * k - 4}" y="${y + 3.5}" text-anchor="end" stroke="none">${i}</text>`;
+    }
+    for (let i = step; i * k < R + 10; i += step) {           // деления по горизонтали и вверх
+      const p = i * k, l = Math.round(i / step) % 5 === 0 ? 5 : 3;
+      body += `<path d="M${cx + p} ${cy - l}V${cy + l}M${cx - p} ${cy - l}V${cy + l}"/>`;
+      if (cy - p > 4) body += `<path d="M${cx - l} ${cy - p}H${cx + l}"/>`;
+    }
+    note = `Ряды через ${step} ${units}, подписи — каждые ${lbl}.`;
+  } else {
+    // «с делениями» и «без делений»: масштаб подстраивается под величину поправки
+    const need = Math.max(Math.abs(holdX), Math.abs(holdY));
+    const steps = units === 'MRAD' ? [1, 2, 5, 10, 20, 50, 100] : [2, 5, 10, 20, 50, 100, 200, 500];
+    step = steps.find(st => Math.ceil((need + st) / st) <= 10) || steps[steps.length - 1];
+    const span = Math.max(step * 5, Math.ceil((need + step) / step) * step);
+    k = R / span;
+    if (type === 'duplex') {
+      body += posts(R * 0.42);
+    } else {
+      for (let i = step; i <= span; i += step) {
+        const p = i * k, big = Math.round(i / step) % 5 === 0, l = big ? 7 : 4;
+        body += `<path d="M${cx + p} ${cy - l}V${cy + l}M${cx - p} ${cy - l}V${cy + l}M${cx - l} ${cy + p}H${cx + l}M${cx - l} ${cy - p}H${cx + l}"/>`;
+        if (big && p < R - 8) body += `<text x="${cx + p}" y="${cy - 10}" text-anchor="middle" stroke="none">${i}</text>`;
+      }
+      note = `Одно деление — ${step} ${units}, подписи — каждые ${step * 5}.`;
+    }
   }
-  const hx = cx + Math.max(-R + 6, Math.min(R - 6, holdX * k));
-  const hy = cy - Math.max(-R + 6, Math.min(R - 6, holdY * k));
-  return `<svg viewBox="0 0 200 200" role="img" aria-label="Сетка прицела с точкой прицеливания">
+  // точка прицеливания; если она за кругом — ставим на край
+  let hx = cx + holdX * k, hy = cy - holdY * k, outside = false;
+  const dx = hx - 100, dy = hy - 100, dist = Math.hypot(dx, dy);
+  if (dist > R - 6) { outside = true; hx = 100 + dx / dist * (R - 6); hy = 100 + dy / dist * (R - 6); }
+  const svg = `<svg viewBox="0 0 200 200" role="img" aria-label="Сетка прицела с точкой прицеливания">
     <defs><clipPath id="rc"><circle cx="100" cy="100" r="96"/></clipPath></defs>
     <circle cx="100" cy="100" r="97" fill="var(--paper)" stroke="var(--ink)" stroke-width="3"/>
     <g clip-path="url(#rc)" stroke="var(--ink)" stroke-width="1.3" fill="var(--muted)" style="font:600 10px var(--font-num)">
-      <path d="M4 100H196M100 4V196" stroke-width="1"/>
-      ${ticks}
+      <path d="M0 ${cy}H200M${cx} 0V200" stroke-width="1"/>
+      ${body}
     </g>
-    <line x1="100" y1="100" x2="${hx}" y2="${hy}" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3 3"/>
-    <circle cx="${hx}" cy="${hy}" r="7" fill="var(--accent)" fill-opacity=".25" stroke="var(--accent)" stroke-width="2"/>
-    <circle cx="${hx}" cy="${hy}" r="2.4" fill="var(--accent)"/>
+    <line x1="${cx}" y1="${cy}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="7" fill="var(--accent)" fill-opacity=".25" stroke="var(--accent)" stroke-width="2"/>
+    <circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="2.4" fill="var(--accent)"/>
   </svg>`;
+  return { svg, note, outside };
+}
+
+// упреждение по движущейся цели: метры и угол (в единицах барабанов), знак — направление движения
+function leadFor(r, x) {
+  const c = S.cond;
+  if (!c.moveOn || !(c.moveKmh > 0)) return null;
+  const v = c.moveKmh / 3.6 * Math.sin(c.moveAng * Math.PI / 180);
+  const m = v * x.t;
+  const a = Math.atan2(m, x.range);
+  const ang = r.units === 'MRAD' ? a * 1000 : a * 180 / Math.PI * 60;
+  return { m, ang, dir: c.moveDir };
 }
 
 const CLOCK_TEXT = { 12: 'в лицо', 1: 'спереди справа', 2: 'спереди справа', 3: 'справа', 4: 'сзади справа', 5: 'сзади справа', 6: 'в спину', 7: 'сзади слева', 8: 'сзади слева', 9: 'слева', 10: 'спереди слева', 11: 'спереди слева' };
@@ -744,8 +897,8 @@ function renderClock() {
 }
 
 function computeShot() {
-  const r = active(), { load, rifle } = engineObjects(r);
-  const { rows, info } = Ballistics.solve(load, rifle, atmoNow(), shotNow(), S.distance, S.distance, atmoZero(r));
+  const r = active(), e = eff(r);
+  const { rows, info } = solveR(r, S.distance, S.distance);
   const x = rows[rows.length - 1];
   const u = r.units === 'MRAD' ? 'MRAD' : 'MOA';
   $('#resTitle').textContent = `Поправки на ${S.distance} м`;
@@ -764,10 +917,41 @@ function computeShot() {
   $('#windSub').textContent = `${fmt(Math.abs(x.sideAng), 2)} ${u} · снос ${lenText(Math.abs(x.sideCm))}`;
   $('#tWind').classList.toggle('zero', wc === 0);
 
-  const hx = -x.sideAng, hy = -x.dropAng;
-  $('#reticle').innerHTML = reticleSVG(hx, hy, r.units);
-  const hDir = Math.abs(hx) < 0.05 ? '' : `, на ${fmt(Math.abs(hx), 1)} ${hx > 0 ? 'правее' : 'левее'}`;
-  $('#reticleNote').innerHTML = `<b>Без кручения барабанов</b> — наведите точку на цель:<br>на ${fmt(Math.abs(hy), 1)} ${u} ${hy >= 0 ? 'выше' : 'ниже'} центра${hDir}.<br><span class="hint">Одно деление — ${reticleSVG.lastStep} ${u}, подписи — каждые ${reticleSVG.lastStep * 5}.</span>`;
+  // упреждение: показываем отдельно, барабаны под него не крутят — выносят точку прицеливания
+  const lead = leadFor(r, x);
+  const lb = $('#leadBox');
+  if (lead) {
+    const side = lead.dir > 0 ? 'вправо' : 'влево';
+    lb.hidden = false;
+    lb.innerHTML = `<div class="lbl">Упреждение по ходу цели</div>
+      <div class="big num"><span class="arrow">${lead.dir > 0 ? '▶' : '◀'}</span>${lenText(lead.m * 100)}<span class="unit">${side}</span></div>
+      <div class="sub num">${fmt(lead.ang, 2)} ${u} · цель пройдёт это расстояние за ${fmt(x.t, 2)} с полёта пули</div>`;
+  } else lb.hidden = true;
+
+  // «Без кручения барабанов»: какую отметку сетки навести на цель.
+  // Нужная поправка — вверх на снижение, вбок против сноса и по ходу цели. Отметка, которую наводят
+  // на цель, лежит в ОБРАТНУЮ сторону от центра: пуля падает → отметка ниже центра, центр смотрит выше цели.
+  const corrX = -x.sideAng + (lead ? lead.dir * lead.ang : 0), corrY = -x.dropAng;
+  const dX = toRetDivs(r, -corrX), dY = toRetDivs(r, -corrY);
+  const ret = reticleSVG(dX, dY, r.reticle, r.retUnits);
+  $('#reticle').innerHTML = ret.svg;
+  let note;
+  if (r.reticle === 'duplex') {
+    const cmY = -x.dropCm, cmX = -x.sideCm + (lead ? lead.dir * lead.m * 100 : 0);
+    const hz = Math.abs(cmX) < 2 ? '' : ` и на ${lenText(Math.abs(cmX))} ${cmX > 0 ? 'правее' : 'левее'}`;
+    note = `<b>Без кручения барабанов</b> — держите перекрестие на ${lenText(Math.abs(cmY))} ${cmY >= 0 ? 'выше' : 'ниже'}${hz} точки, куда хотите попасть.<br><span class="hint">Оранжевым показано, где при этом будет цель. У сетки нет делений — выносите по размерам цели.</span>`;
+  } else {
+    const sfpOff = r.focal === 'SFP' && r.curMag !== r.sfpMag;
+    const unit = sfpOff ? 'дел.' : r.retUnits;
+    const hz = Math.abs(dX) < 0.05 ? '' : `, на ${fmt(Math.abs(dX), 1)} ${dX > 0 ? 'правее' : 'левее'}`;
+    note = `<b>Без кручения барабанов</b> — наведите на цель оранжевую отметку:<br>на ${fmt(Math.abs(dY), 1)} ${unit} ${dY >= 0 ? 'выше' : 'ниже'} центра${hz}.<br><span class="hint">${ret.note}</span>`;
+    if (sfpOff) note += `<br><span class="hint">Сетка во 2-й плоскости: при ${r.curMag}× одно деление = ${fmt(r.sfpMag / r.curMag, 2)} ${r.retUnits}.</span>`;
+  }
+  if (r.focal === 'SFP' && r.reticle !== 'duplex') {
+    note += `<div class="mag"><span>Кратность</span><button type="button" class="round-btn sm" data-mag="-1" aria-label="Меньше кратность">−</button><b class="num">${r.curMag}×</b><button type="button" class="round-btn sm" data-mag="1" aria-label="Больше кратность">+</button></div>`;
+  }
+  if (ret.outside) note += `<div class="alert" style="margin-top:6px">Точка за пределами сетки — для такой поправки крутите барабаны.</div>`;
+  $('#reticleNote').innerHTML = note;
 
   $('#stV').innerHTML = `${fmt(x.v)}<small>м/с</small>`;
   $('#stE').innerHTML = `${fmt(x.energy)}<small>Дж</small>`;
@@ -779,41 +963,50 @@ function computeShot() {
   else if (x.mach < 1.15) al.push(['', 'Пуля близка к скорости звука — на этой дистанции разброс может расти.']);
   if (info.sg < 1.2) al.push(['bad', `Шаг нарезов слишком медленный для этой пули (устойчивость ${fmt(info.sg, 2)}). Пуля может кувыркаться.`]);
   else if (info.sg < 1.4) al.push(['', `Устойчивость пули на грани (${fmt(info.sg, 2)}). В холод и на высоте может ухудшиться.`]);
+  if (r.loads.length > 1 && r.zeroLoadId !== r.activeLoadId) {
+    al.push(['info', `Прицел пристрелян патроном «${esc(loadLabel(zeroLoadOf(r)))}». Поправки для «${esc(loadLabel(activeLoad(r)))}» учитывают, что он летит иначе — проверьте на 100 м.`]);
+  }
+  const bb = bulletById(e.bulletId);
+  if (bb && bb.approx) al.push(['', `BC патрона «${esc(bb.maker)}» — оценка по открытым данным. Уточните его по попаданиям.`]);
   if (r.example) al.push(['info', 'Цифры рассчитаны для примера. Для своей винтовки введите её данные и скорость с хронографа.']);
   $('#alerts').innerHTML = al.map(([c, t]) => `<div class="alert ${c}">${t}</div>`).join('');
 }
 
 // ---------- таблица ----------
 function computeTable() {
-  const r = active(), { load, rifle, b } = engineObjects(r);
-  const { rows } = Ballistics.solve(load, rifle, atmoNow(), shotNow(), S.tableMax, S.tableStep, atmoZero(r));
-  const u = r.units;
+  const r = active(), e = eff(r), b = bulletById(e.bulletId) || BULLET_DB[0];
+  const { rows } = solveR(r, S.tableMax, S.tableStep);
+  const u = r.units, mv = S.cond.moveOn && S.cond.moveKmh > 0;
   $('#tblTitle').textContent = `Таблица: ${r.name}`;
-  let h = `<thead><tr><th>Дист., м</th><th>Вверх, кл.</th><th>${u}</th><th>Вбок, кл.</th><th>${u}</th><th>Пуля ниже, см</th><th>Снос, см</th><th>Скорость</th><th>Энергия, Дж</th><th>Время, с</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th>Дист., м</th><th>Вверх, кл.</th><th>${u}</th><th>Вбок, кл.</th><th>${u}</th>${mv ? '<th>Упрежд.</th>' : ''}<th>Пуля ниже, см</th><th>Снос, см</th><th>Скорость</th><th>Энергия, Дж</th><th>Время, с</th></tr></thead><tbody>`;
   for (const x of rows) {
     const wc = Math.round(x.sideClicks);
     const cls = [x.mach < 1 ? 'sub' : '', Math.abs(x.range - S.distance) < S.tableStep / 2 ? 'cur' : ''].join(' ');
+    const ld = mv ? leadFor(r, x) : null;
     h += `<tr class="${cls}"><td class="key">${fmt(x.range)}</td><td class="key">${fmt(Math.round(x.dropClicks))}</td><td>${fmt(-x.dropAng, 1)}</td>
       <td class="key">${wc === 0 ? '0' : Math.abs(wc) + (wc > 0 ? ' ▶' : ' ◀')}</td><td>${fmt(Math.abs(x.sideAng), 1)}</td>
+      ${mv ? `<td>${lenText(ld.m * 100)}</td>` : ''}
       <td>${fmt(-x.dropCm)}</td><td>${fmt(Math.abs(x.sideCm))}</td><td>${fmt(x.v)}</td><td>${fmt(x.energy)}</td><td>${fmt(x.t, 2)}</td></tr>`;
   }
   $('#tbl').innerHTML = h + '</tbody>';
   const c = S.cond;
   $('#tblLegend').textContent = `Условия: ${c.temp} °C, ${c.pressureMm} мм рт. ст., ветер ${c.windMs} м/с ${c.windMs ? CLOCK_TEXT[Math.round(c.windClock)] : ''}, угол ${c.lookDeg}°. ` +
-    `Пуля ${b.maker} ${b.mass_gr}gr, ${r.v0} м/с. Жёлтым — дозвук. ◀ ▶ — куда крутить горизонталь. Условия меняются на вкладке «Выстрел».`;
+    `Патрон: ${loadLabel(activeLoad(r))}, ${b.maker} ${b.mass_gr}gr, ${e.v0} м/с. Жёлтым — дозвук. ◀ ▶ — куда крутить горизонталь.` +
+    (mv ? ` Упреждение — для цели ${c.moveKmh} км/ч ${c.moveDir > 0 ? 'вправо' : 'влево'}.` : '') + ' Условия меняются на вкладке «Выстрел».';
 }
 
 let timer = null;
 function schedule() { clearTimeout(timer); timer = setTimeout(() => { save(); if (route() === 'table') computeTable(); else computeShot(); }, 90); }
 
 // ---------- поля условий ----------
-const COND_FIELDS = { cTemp: 'temp', cPress: 'pressureMm', cHum: 'humidity', cAngle: 'lookDeg', cWind: 'windMs', cPowder: 'powderTemp', cLat: 'lat', cAz: 'az' };
-const LIMITS = { humidity: [0, 100], windMs: [0, 40], lookDeg: [-70, 70], lat: [-90, 90], az: [0, 359], pressureMm: [450, 820], temp: [-50, 55], powderTemp: [-50, 70] };
+const COND_FIELDS = { cTemp: 'temp', cPress: 'pressureMm', cHum: 'humidity', cAngle: 'lookDeg', cWind: 'windMs', cPowder: 'powderTemp', cLat: 'lat', cAz: 'az', mvKmh: 'moveKmh' };
+const LIMITS = { moveKmh: [0, 120], humidity: [0, 100], windMs: [0, 40], lookDeg: [-70, 70], lat: [-90, 90], az: [0, 359], pressureMm: [450, 820], temp: [-50, 55], powderTemp: [-50, 70] };
 function fillConditions() {
   for (const [id, k] of Object.entries(COND_FIELDS)) $('#' + id).value = S.cond[k];
   $('#cPowderOn').checked = S.cond.powderOn; $('#powderField').hidden = !S.cond.powderOn;
   $('#cCorOn').checked = S.cond.cor; $('#corFields').hidden = !S.cond.cor;
   $('#tMax').value = S.tableMax; $('#tStep').value = S.tableStep;
+  renderMove();
 }
 function readField(id) {
   const el = $('#' + id); let v = parseFloat(String(el.value).replace(',', '.'));
@@ -878,9 +1071,9 @@ function sgPill(sg) {
 }
 function renderRifleList() {
   $('#rifleList').innerHTML = S.rifles.map(r => {
-    const b = bulletById(r.bulletId);
+    const e = eff(r), b = bulletById(e.bulletId);
     return `<div class="rifle-card ${r.id === S.activeId ? 'active' : ''}">
-      <div><h3>${esc(r.name)}</h3><p>${esc(r.caliber)} · ${b ? esc(b.maker + ' ' + b.mass_gr + 'gr ' + b.name) : 'пуля не выбрана'}<br>${r.v0} м/с · пристрелка ${r.zeroM} м · клик ${r.click} ${r.units}${r.trued ? ' · уточнено ' + r.trued.date : ''}</p></div>
+      <div><h3>${esc(r.name)}</h3><p>${esc(r.caliber)} · ${b ? esc(b.maker + ' ' + b.mass_gr + 'gr ' + b.name) : 'пуля не выбрана'}<br>${e.v0} м/с · пристрелка ${r.zeroM} м · клик ${r.click} ${r.units}${r.loads.length > 1 ? ' · патронов: ' + r.loads.length : ''}${e.trued ? ' · уточнено ' + e.trued.date : ''}</p></div>
       <div class="row-btns">
         ${r.id === S.activeId ? '<span class="pill ok">Выбрана</span>' : `<button class="btn primary" type="button" data-act="use" data-id="${r.id}">Выбрать</button>`}
         <button class="btn" type="button" data-act="edit" data-id="${r.id}">Изменить</button>
@@ -895,22 +1088,27 @@ $('#rifleList').addEventListener('click', e => {
 });
 
 let draft = null;
+const curL = () => draft.loads.find(l => l.id === draft._loadId) || draft.loads[0];
 function openEditor(r) {
-  draft = r ? JSON.parse(JSON.stringify(r)) : {
+  draft = r ? JSON.parse(JSON.stringify(r)) : migrateRifle({
     id: uid(), name: '', caliber: '.308 Win', sightCm: 4.5, twistIn: 10, twistRight: true, units: 'MRAD', click: 0.1,
     bulletId: '', model: 'G7', v0: 800, powderRefTemp: 15, powderSens: 0, zeroM: 100, zero: { temp: 15, pressureMm: 760, humidity: 50 },
-  };
+  });
   draft._isNew = !r;
+  draft._loadId = draft.activeLoadId;
   delete draft.example;
   $('#editorCard').hidden = false;
   renderEditor();
   $('#editorCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function fNum(id, label, val, unit, hint = '', step = 'any') {
-  return `<div class="f"><label for="${id}">${label}${unit ? `, ${unit}` : ''}</label><input type="number" inputmode="decimal" step="${step}" id="${id}" value="${val}">${hint ? `<span class="hint">${hint}</span>` : ''}</div>`;
+  return `<div class="f"><label for="${id}">${label}${unit ? `, ${unit}` : ''}</label><input type="number" inputmode="decimal" step="${step}" id="${id}" value="${val ?? ''}">${hint ? `<span class="hint">${hint}</span>` : ''}</div>`;
 }
+const seg = (attr, opts, cur, label) => `<div class="seg" role="group" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" data-${attr}="${v}" aria-pressed="${String(v) === String(cur)}">${t}</button>`).join('')}</div>`;
 function renderEditor() {
-  const d = draft, b = bulletById(d.bulletId);
+  const d = draft, L = curL(), b = bulletById(L.bulletId);
+  const retOpts = Object.entries(RETICLES).filter(([k]) => k !== 'mildot' || d.retUnits === 'MRAD');
+  const g1Label = b && b.bc_g1_steps ? `G1 ступенч. (${b.bc_g1_steps.map(s => s[1]).join(' / ')})` : b ? `G1 (${b.bc_g1})` : 'G1';
   $('#editor').innerHTML = `
   <fieldset><legend>${d._isNew ? 'Новая винтовка' : 'Винтовка'}</legend>
     <div class="f"><label for="eName">Название</label><input type="text" id="eName" value="${esc(d.name)}" placeholder="Например: Тикка .308 охота"></div>
@@ -920,22 +1118,31 @@ function renderEditor() {
     </div>
     <div class="two">
       ${fNum('eTwist', 'Шаг нарезов', d.twistIn, 'дюймы', 'Для 1:10″ введите 10')}
-      <div class="f"><label>Нарезы</label><div class="seg" role="group" aria-label="Направление нарезов">
-        <button type="button" data-tw="1" aria-pressed="${d.twistRight}">Правые</button><button type="button" data-tw="0" aria-pressed="${!d.twistRight}">Левые</button></div>
+      <div class="f"><label>Нарезы</label>${seg('tw', [['1', 'Правые'], ['0', 'Левые']], d.twistRight ? '1' : '0', 'Направление нарезов')}
         <span class="hint">Почти у всех — правые</span></div>
     </div>
   </fieldset>
 
   <fieldset><legend>Прицел</legend>
     <div class="two">
-      <div class="f"><label>Единицы барабанов</label><div class="seg" role="group" aria-label="Единицы прицела">
-        <button type="button" data-un="MRAD" aria-pressed="${d.units === 'MRAD'}">MRAD</button><button type="button" data-un="MOA" aria-pressed="${d.units === 'MOA'}">MOA</button></div>
+      <div class="f"><label>Единицы барабанов</label>${seg('un', [['MRAD', 'MRAD'], ['MOA', 'MOA']], d.units, 'Единицы барабанов')}
         <span class="hint">Написано на барабане прицела</span></div>
       ${fNum('eClick', 'Цена клика', d.click, d.units, d.units === 'MRAD' ? 'Обычно 0.1' : 'Обычно 0.25')}
     </div>
+    <div class="f"><label>Сетка</label>${seg('ret', retOpts, d.reticle, 'Тип сетки')}
+      <span class="hint">Выберите похожую на вашу: важны не узоры, а есть ли деления и какие.</span></div>
+    ${d.reticle === 'duplex' ? '' : `<div class="f"><label>Деления сетки в</label>${seg('ru', [['MRAD', 'MRAD (мил)'], ['MOA', 'MOA']], d.retUnits, 'Единицы сетки')}
+      <span class="hint">Обычно так же, как у барабанов</span></div>`}
+    <div class="f"><label>Плоскость сетки</label>${seg('fp', [['FFP', 'Первая (FFP)'], ['SFP', 'Вторая (SFP)']], d.focal, 'Фокальная плоскость')}
+      <span class="hint">Покрутите зум: сетка растёт вместе с картинкой — первая. Остаётся того же размера — вторая.</span></div>
+    ${d.focal === 'SFP' ? fNum('eSfpMag', 'Деления верны на кратности', d.sfpMag, '×', 'Обычно на максимальной — смотрите инструкцию к прицелу') : ''}
   </fieldset>
 
-  <fieldset><legend>Патрон</legend>
+  <fieldset><legend>Патроны</legend>
+    <div class="chips" id="eLoads">${d.loads.map(l => `<button type="button" class="chip" data-lid="${l.id}" aria-pressed="${l.id === L.id}">${esc(loadLabel(l))}${l.id === d.zeroLoadId && d.loads.length > 1 ? ' ⌖' : ''}</button>`).join('')}
+      <button type="button" class="chip" data-addload="1">+ Ещё патрон</button></div>
+    ${d.loads.length > 1 ? '<span class="hint">⌖ — этим патроном пристрелян прицел.</span>' : ''}
+    <div class="f"><label for="eLName">Название патрона (необязательно)</label><input type="text" id="eLName" value="${esc(L.name || '')}" placeholder="Например: охотничий, матчевый"></div>
     <div class="f"><label for="eBq">Пуля</label><input type="search" id="eBq" placeholder="Поиск: 308 175, 7н1, 5.45, lapua…">
       ${b ? `<span class="hint">Выбрано: <b>${esc(b.maker + ' ' + b.caliber + ' ' + b.mass_gr + 'gr ' + b.name)}</b></span>` : '<span class="hint">Найдите пулю в списке ниже</span>'}</div>
     <div class="bullet-results" id="eBres"></div>
@@ -947,16 +1154,19 @@ function renderEditor() {
         ${fNum('cbLen', 'Длина пули', 30, 'мм', 'Можно примерно')}
         <button class="btn" type="button" id="cbAdd">Добавить пулю</button>
       </div></details>
-    ${b && b.bc_g7 ? `<div class="f"><label>Какой BC использовать</label><div class="seg" role="group" aria-label="Модель сопротивления">
-      <button type="button" data-md="G7" aria-pressed="${d.model === 'G7'}">G7 (${b.bc_g7})</button><button type="button" data-md="G1" aria-pressed="${d.model !== 'G7'}">G1 (${b.bc_g1})</button></div>
-      <span class="hint">Для длинных обтекаемых пуль G7 точнее</span></div>` : ''}
-    ${d.bcScale && d.bcScale !== 1 ? `<div class="alert info">BC уточнён по попаданиям: ×${d.bcScale} <button class="btn" type="button" id="eBcReset" style="margin-left:auto">Сбросить</button></div>` : ''}
-    ${d.trued ? `<span class="hint">Последнее уточнение: ${d.trued.date}, на ${d.trued.dist} м (${d.trued.par === 'v0' ? 'скорость' : 'BC'}: ${d.trued.from} → ${d.trued.to})</span>` : ''}
+    ${b && b.bc_g7 ? `<div class="f"><label>Какой BC использовать</label>${seg('md', [['G7', `G7 (${b.bc_g7})`], ['G1', g1Label]], L.model === 'G7' ? 'G7' : 'G1', 'Модель сопротивления')}
+      <span class="hint">${b.bc_g1_steps ? 'Ступенчатый G1 — так BC публикует Sierra, на дальних дистанциях точнее одного числа.' : 'Для длинных обтекаемых пуль G7 точнее'}</span></div>`
+      : b && b.bc_g1_steps ? '<span class="hint">BC ступенчатый — по данным Sierra для разных скоростей.</span>' : ''}
+    ${L.bcScale && L.bcScale !== 1 ? `<div class="alert info">BC уточнён по попаданиям: ×${L.bcScale} <button class="btn" type="button" id="eBcReset" style="margin-left:auto">Сбросить</button></div>` : ''}
+    ${L.trued ? `<span class="hint">Последнее уточнение: ${L.trued.date}, на ${L.trued.dist} м (${L.trued.par === 'v0' ? 'скорость' : 'BC'}: ${L.trued.from} → ${L.trued.to})</span>` : ''}
     <div class="two">
-      ${fNum('eV0', 'Скорость пули', d.v0, 'м/с', 'Лучше по хронографу')}
-      ${fNum('ePref', 'Измерена при', d.powderRefTemp, '°C', 'Температура патронов')}
+      ${fNum('eV0', 'Скорость пули', L.v0, 'м/с', 'Лучше по хронографу')}
+      ${fNum('ePref', 'Измерена при', L.powderRefTemp, '°C', 'Температура патронов')}
     </div>
-    ${fNum('eSens', 'Термочувствительность пороха', d.powderSens, 'м/с на 1 °C', '0 — не учитывать. Обычно 0.3–1.5')}
+    ${fNum('eSens', 'Термочувствительность пороха', L.powderSens, 'м/с на 1 °C', '0 — не учитывать. Обычно 0.3–1.5')}
+    ${d.loads.length > 1 ? `<label class="switch"><input type="checkbox" id="eZeroL" ${d.zeroLoadId === L.id ? 'checked' : ''}> Прицел пристрелян этим патроном</label>
+      <span class="hint">Для остальных патронов программа учтёт, что при той же установке прицела они попадают в другое место.</span>
+      <button class="btn danger" type="button" id="eDelLoad">Удалить этот патрон</button>` : ''}
   </fieldset>
 
   <fieldset><legend>Пристрелка</legend>
@@ -978,6 +1188,7 @@ function renderBulletResults(q) {
   const norm = t => t.toLowerCase().replace(/,/g, '.').replace(/×/g, 'x').replace(/х/g, 'x').replace(/н/g, 'n');
   const words = norm(q).split(/\s+/).filter(Boolean);
   const caliberHint = (draft.caliber.match(/\d{3}|\d\.\d|\d{2,3}/) || [''])[0];
+  const L = curL();
   let list = allBullets().filter(b => {
     const hay = norm(`${b.maker} ${b.name} ${b.caliber} ${b.caliber.replace(/[^0-9a-zа-я]/gi, '')} ${b.mass_gr}gr ${b.mass_gr} ${b.mass_g}г`);
     return words.every(w => hay.includes(w));
@@ -985,50 +1196,83 @@ function renderBulletResults(q) {
   if (!words.length && caliberHint) {
     const m = list.filter(b => b.caliber.includes(caliberHint)); if (m.length) list = m;
   }
-  $('#eBres').innerHTML = list.slice(0, 12).map(b => `<button type="button" class="bullet-opt" data-bid="${b.id}" aria-pressed="${b.id === draft.bulletId}">
-    <b>${esc(b.maker)} ${b.mass_gr}gr ${esc(b.name)}</b><small>${esc(b.caliber)} · ${b.mass_g} г · G1 ${b.approx ? '≈' : ''}${b.bc_g1}${b.bc_g7 ? ' · G7 ' + (b.approx ? '≈' : '') + b.bc_g7 : ''}${b.note ? '<br>' + esc(b.note) : ''}</small></button>`).join('')
+  $('#eBres').innerHTML = list.slice(0, 12).map(b => `<button type="button" class="bullet-opt" data-bid="${b.id}" aria-pressed="${b.id === L.bulletId}">
+    <b>${esc(b.maker)} ${b.mass_gr}gr ${esc(b.name)}</b><small>${esc(b.caliber)} · ${b.mass_g} г · G1 ${b.approx ? '≈' : ''}${b.bc_g1}${b.bc_g1_steps ? ' (ступенч.)' : ''}${b.bc_g7 ? ' · G7 ' + (b.approx ? '≈' : '') + b.bc_g7 : ''}${b.note ? '<br>' + esc(b.note) : ''}</small></button>`).join('')
     || '<p class="hint">Ничего не найдено — введите пулю вручную ниже.</p>';
 }
 function readEditor() {
-  const n = id => { const v = parseFloat(String($('#' + id).value).replace(',', '.')); return isNaN(v) ? null : v; };
-  const d = draft;
+  const n = id => { const el = $('#' + id); if (!el) return null; const v = parseFloat(String(el.value).replace(',', '.')); return isNaN(v) ? null : v; };
+  const d = draft, L = curL();
   d.name = $('#eName').value.trim(); d.caliber = $('#eCal').value.trim();
-  for (const [id, k] of [['eSight', 'sightCm'], ['eTwist', 'twistIn'], ['eClick', 'click'], ['eV0', 'v0'], ['ePref', 'powderRefTemp'], ['eSens', 'powderSens'], ['eZero', 'zeroM']]) { const v = n(id); if (v != null) d[k] = v; }
+  const prevSfp = d.sfpMag;
+  for (const [id, k] of [['eSight', 'sightCm'], ['eTwist', 'twistIn'], ['eClick', 'click'], ['eZero', 'zeroM'], ['eSfpMag', 'sfpMag']]) { const v = n(id); if (v != null) d[k] = v; }
+  if (d.sfpMag !== prevSfp && d.curMag === prevSfp) d.curMag = d.sfpMag;
+  for (const [id, k] of [['eV0', 'v0'], ['ePref', 'powderRefTemp'], ['eSens', 'powderSens']]) { const v = n(id); if (v != null) L[k] = v; }
+  L.name = $('#eLName').value.trim();
   const zt = n('eZt'), zp = n('eZp'); if (zt != null) d.zero.temp = zt; if (zp != null) d.zero.pressureMm = zp;
 }
 function updateSg() {
   const box = $('#eSg'); if (!box) return;
-  const b = bulletById(draft.bulletId); if (!b) { box.innerHTML = ''; return; }
-  const { load, rifle } = engineObjects(draft);
-  const sg = Ballistics.stability(load.bullet, rifle, draft.v0, { temp: draft.zero.temp, pressureHpa: draft.zero.pressureMm * MM_TO_HPA, humidity: 50 });
+  const L = curL(), b = bulletById(L.bulletId); if (!b) { box.innerHTML = ''; return; }
+  const { load, rifle } = engineObjects(eff(draft, L));
+  const sg = Ballistics.stability(load.bullet, rifle, L.v0, { temp: draft.zero.temp, pressureHpa: draft.zero.pressureMm * MM_TO_HPA, humidity: 50 });
   box.innerHTML = sgPill(sg);
 }
 $('#editor').addEventListener('input', e => {
   if (e.target.id === 'eBq') { renderBulletResults(e.target.value); return; }
   if (e.target.id.startsWith('cb')) return;
+  if (e.target.id === 'eZeroL') {
+    readEditor();
+    const L = curL();
+    if (e.target.checked) draft.zeroLoadId = L.id;
+    else if (draft.zeroLoadId === L.id) draft.zeroLoadId = (draft.loads.find(l => l.id !== L.id) || L).id;
+    renderEditor(); return;
+  }
   readEditor(); updateSg();
+  if (e.target.id === 'eLName') $(`#eLoads [data-lid="${curL().id}"]`).textContent = loadLabel(curL());
 });
 $('#editor').addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
-  if (t.dataset.bid) { readEditor(); draft.bulletId = t.dataset.bid; const b = bulletById(t.dataset.bid); if (!b.bc_g7) draft.model = 'G1'; renderEditor(); return; }
+  const L = curL();
+  if (t.dataset.bid) { readEditor(); L.bulletId = t.dataset.bid; const b = bulletById(t.dataset.bid); L.model = b.bc_g7 ? (L.model || 'G7') : 'G1'; renderEditor(); return; }
   if (t.dataset.tw) { readEditor(); draft.twistRight = t.dataset.tw === '1'; renderEditor(); return; }
-  if (t.dataset.un) { readEditor(); draft.units = t.dataset.un; draft.click = t.dataset.un === 'MRAD' ? 0.1 : 0.25; renderEditor(); return; }
-  if (t.dataset.md) { readEditor(); draft.model = t.dataset.md; renderEditor(); return; }
+  if (t.dataset.un) { readEditor(); const was = draft.units; draft.units = t.dataset.un; if (draft.retUnits === was) draft.retUnits = t.dataset.un; draft.click = t.dataset.un === 'MRAD' ? 0.1 : 0.25; if (draft.retUnits !== 'MRAD' && draft.reticle === 'mildot') draft.reticle = 'hash'; renderEditor(); return; }
+  if (t.dataset.ret) { readEditor(); draft.reticle = t.dataset.ret; renderEditor(); return; }
+  if (t.dataset.ru) { readEditor(); draft.retUnits = t.dataset.ru; if (draft.retUnits !== 'MRAD' && draft.reticle === 'mildot') draft.reticle = 'hash'; renderEditor(); return; }
+  if (t.dataset.fp) { readEditor(); draft.focal = t.dataset.fp; if (!draft.curMag) draft.curMag = draft.sfpMag; renderEditor(); return; }
+  if (t.dataset.md) { readEditor(); L.model = t.dataset.md; renderEditor(); return; }
+  if (t.dataset.lid) { readEditor(); draft._loadId = t.dataset.lid; renderEditor(); return; }
+  if (t.dataset.addload) {
+    readEditor();
+    const nl = { id: 'l' + uid(), name: '', bulletId: '', model: 'G7', v0: L.v0, powderRefTemp: L.powderRefTemp, powderSens: L.powderSens };
+    draft.loads.push(nl); draft._loadId = nl.id; renderEditor();
+    $('#eBq').focus(); toast('Новый патрон: выберите пулю и укажите скорость');
+    return;
+  }
+  if (t.id === 'eDelLoad') {
+    if (t.dataset.sure !== '1') { t.dataset.sure = '1'; t.textContent = 'Точно удалить патрон?'; return; }
+    readEditor();
+    draft.loads = draft.loads.filter(l => l.id !== L.id);
+    if (!draft.loads.find(l => l.id === draft.zeroLoadId)) draft.zeroLoadId = draft.loads[0].id;
+    if (!draft.loads.find(l => l.id === draft.activeLoadId)) draft.activeLoadId = draft.loads[0].id;
+    draft._loadId = draft.loads[0].id; renderEditor(); toast('Патрон удалён');
+    return;
+  }
   if (t.id === 'cbAdd') {
     const n = id => parseFloat(String($('#' + id).value).replace(',', '.'));
     const gr = n('cbGr'), g1 = n('cbG1');
     if (!(gr > 0) || !(g1 > 0)) { toast('Укажите массу и BC G1'); return; }
     const nb = { id: 'custom-' + uid(), maker: $('#cbMaker').value.trim() || 'Своя', name: $('#cbName').value.trim() || 'пуля', caliber: draft.caliber,
       diameter_mm: n('cbDia') || 7.82, mass_gr: gr, mass_g: +(gr * 0.06479891).toFixed(2), bc_g1: g1, bc_g7: n('cbG7') > 0 ? n('cbG7') : null, length_mm: n('cbLen') || 30 };
-    S.custom.push(nb); save(); readEditor(); draft.bulletId = nb.id; draft.model = nb.bc_g7 ? 'G7' : 'G1'; renderEditor(); toast('Пуля добавлена');
+    S.custom.push(nb); save(); readEditor(); L.bulletId = nb.id; L.model = nb.bc_g7 ? 'G7' : 'G1'; renderEditor(); toast('Пуля добавлена');
     return;
   }
-  if (t.id === 'eBcReset') { readEditor(); draft.bcScale = 1; renderEditor(); return; }
+  if (t.id === 'eBcReset') { readEditor(); L.bcScale = 1; renderEditor(); return; }
   if (t.id === 'eCancel') { draft = null; $('#editorCard').hidden = true; return; }
   if (t.id === 'eDel') {
     if (t.dataset.sure !== '1') { t.dataset.sure = '1'; t.textContent = 'Точно удалить?'; return; }
     S.rifles = S.rifles.filter(r => r.id !== draft.id);
-    if (!S.rifles.length) S.rifles = defaultState().rifles;
+    if (!S.rifles.length) S.rifles = defaultState().rifles.map(migrateRifle);
     if (!S.rifles.find(r => r.id === S.activeId)) S.activeId = S.rifles[0].id;
     save(); draft = null; $('#editorCard').hidden = true; renderRifleList(); renderChip(); toast('Винтовка удалена');
   }
@@ -1036,9 +1280,14 @@ $('#editor').addEventListener('click', e => {
 $('#editor').addEventListener('submit', e => {
   e.preventDefault(); readEditor();
   if (!draft.name) { toast('Введите название винтовки'); $('#eName').focus(); return; }
-  if (!bulletById(draft.bulletId)) { toast('Выберите пулю'); $('#eBq').focus(); return; }
-  if (!(draft.v0 > 100)) { toast('Проверьте начальную скорость'); return; }
-  const isNew = draft._isNew; delete draft._isNew;
+  for (const L of draft.loads) {
+    if (!bulletById(L.bulletId)) { draft._loadId = L.id; renderEditor(); toast('Выберите пулю для этого патрона'); $('#eBq').focus(); return; }
+    if (!(L.v0 > 100)) { draft._loadId = L.id; renderEditor(); toast('Проверьте скорость пули'); $('#eV0').focus(); return; }
+  }
+  const isNew = draft._isNew;
+  draft.activeLoadId = draft._loadId || draft.activeLoadId;
+  delete draft._isNew; delete draft._loadId;
+  migrateRifle(draft);
   if (isNew) {
     S.rifles = S.rifles.filter(r => !r.example);   // пример убираем, когда появилась своя
     S.rifles.push(draft);
@@ -1048,6 +1297,7 @@ $('#editor').addEventListener('submit', e => {
   renderRifleList(); renderChip(); toast('Сохранено'); location.hash = 'shot';
 });
 $('#addRifle').addEventListener('click', () => openEditor(null));
+
 
 $('#exportBtn').addEventListener('click', async () => {
   const data = JSON.stringify({ rifles: S.rifles, custom: S.custom });
@@ -1059,7 +1309,7 @@ $('#importBtn').addEventListener('click', () => {
   try {
     const d = JSON.parse($('#importText').value);
     if (!Array.isArray(d.rifles) || !d.rifles.length) throw 0;
-    S.rifles = d.rifles; S.custom = d.custom || []; S.activeId = S.rifles[0].id; save();
+    S.custom = d.custom || []; S.rifles = d.rifles.map(migrateRifle); S.activeId = S.rifles[0].id; save();
     renderRifleList(); renderChip(); $('#importBox').hidden = true; toast(`Загружено винтовок: ${S.rifles.length}`);
   } catch (e) { toast('Не получилось прочитать текст копии'); }
 });
@@ -1258,12 +1508,11 @@ $('#trueForm').addEventListener('click', e => {
 
 // Подбор параметра бисекцией: ищем значение, при котором расчётное попадание совпадает с фактическим
 function trueSolve(r, par, D, targetAng) {
-  const base = r[par === 'v0' ? 'v0' : 'bcScale'] || 1;
+  const L = activeLoad(r);
+  const base = par === 'v0' ? L.v0 : (L.bcScale || 1);
   const lo0 = par === 'v0' ? base * 0.75 : base * 0.6, hi0 = par === 'v0' ? base * 1.25 : base * 1.6;
   const f = x => {
-    const rr = Object.assign({}, r, par === 'v0' ? { v0: x } : { bcScale: x });
-    const { load, rifle } = engineObjects(rr);
-    const { rows } = Ballistics.solve(load, rifle, atmoNow(), shotNow(), D, D, atmoZero(rr));
+    const { rows } = solveR(r, D, D, { load: par === 'v0' ? { v0: x } : { bcScale: x } });
     return rows.length ? rows[rows.length - 1].dropAng : -1e9;
   };
   let lo = lo0, hi = hi0;
@@ -1294,25 +1543,177 @@ $('#trueForm').addEventListener('submit', e => {
       return;
     }
     const isV = TR.par === 'v0';
-    const before = isV ? r.v0 : (r.bcScale || 1), after = isV ? Math.round(val * 10) / 10 : Math.round(val * 1000) / 1000;
+    const L = activeLoad(r);
+    const before = isV ? L.v0 : (L.bcScale || 1), after = isV ? Math.round(val * 10) / 10 : Math.round(val * 1000) / 1000;
     const pct = (after / before - 1) * 100;
-    const b = bulletById(r.bulletId), bcBase = r.model === 'G7' && b.bc_g7 ? b.bc_g7 : b.bc_g1;
+    const b = bulletById(L.bulletId), bcBase = L.model === 'G7' && b.bc_g7 ? b.bc_g7 : b.bc_g1;
     const show = v => isV ? `${fmt(v, 1)} м/с` : `${(bcBase * v).toFixed(3)}`;
     const warn = Math.abs(pct) > 5 ? `<div class="alert">Изменение больше 5%. Перед применением убедитесь, что винтовка пристреляна и данные прицела верны.</div>` : '';
     $('#trResult').innerHTML = `<div class="true-res">
-      <div class="hint">${isV ? 'Скорость пули' : 'BC пули (' + r.model + ')'} для «${esc(r.name)}»</div>
+      <div class="hint">${isV ? 'Скорость пули' : 'BC пули (' + L.model + ')'} для «${esc(r.name)}», патрон «${esc(loadLabel(L))}»</div>
       <div class="ba"><s>${show(before)}</s> → <span>${show(after)}</span></div>
       <div class="hint">Изменение ${pct > 0 ? '+' : ''}${fmt(pct, 1)}%. После применения поправка на ${D} м совпадёт с вашим попаданием.</div>
       ${warn}
       <div class="row-btns" style="justify-content:flex-start"><button class="btn accent" type="button" id="trApply">Применить к винтовке</button></div>
     </div>`;
     $('#trApply').onclick = () => {
-      if (isV) r.v0 = after; else r.bcScale = after;
-      r.trued = { par: TR.par, from: before, to: after, dist: D, date: new Date().toISOString().slice(0, 10) };
+      if (isV) L.v0 = after; else L.bcScale = after;
+      L.trued = { par: TR.par, from: before, to: after, dist: D, date: new Date().toISOString().slice(0, 10) };
       delete r.example; save(); renderChip(); computeShot();
       $('#trueForm').hidden = true; toast('Готово: расчёт уточнён');
     };
   }, 30);
+});
+
+// ---------- движущаяся цель: поля ----------
+function renderMove() {
+  const c = S.cond;
+  $('#mvOn').checked = !!c.moveOn;
+  $('#mvFields').hidden = !c.moveOn;
+  $('#mvKmh').value = c.moveKmh;
+  document.querySelectorAll('#mvFields [data-mvdir]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.mvdir === c.moveDir)));
+  document.querySelectorAll('#mvFields [data-mvang]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.mvang === c.moveAng)));
+  document.querySelectorAll('#mvPresets .chip').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.kmh === c.moveKmh)));
+  if (c.moveOn) $('#moveBox').open = true;
+}
+$('#mvOn').addEventListener('change', e => { S.cond.moveOn = e.target.checked; renderMove(); schedule(); });
+$('#moveBox').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.mvdir) S.cond.moveDir = +b.dataset.mvdir;
+  else if (b.dataset.mvang) S.cond.moveAng = +b.dataset.mvang;
+  else if (b.dataset.kmh) S.cond.moveKmh = +b.dataset.kmh;
+  else return;
+  renderMove(); schedule();
+});
+
+// ---------- кратность для сетки во 2-й плоскости ----------
+$('#reticleNote').addEventListener('click', e => {
+  const b = e.target.closest('[data-mag]'); if (!b) return;
+  const r = active();
+  r.curMag = Math.max(1, Math.min(60, (r.curMag || r.sfpMag) + +b.dataset.mag));
+  save(); computeShot();
+});
+
+// ---------- переключатель патрона на экране «Выстрел» ----------
+function renderLoadBar() {
+  const r = active(), bar = $('#loadBar');
+  if (!bar) return;
+  if (r.loads.length < 2) { bar.hidden = true; bar.innerHTML = ''; return; }
+  bar.hidden = false;
+  bar.innerHTML = `<span class="hint">Патрон:</span>` + r.loads.map(L => `<button type="button" class="chip" data-load="${L.id}" aria-pressed="${L.id === r.activeLoadId}">${esc(loadLabel(L))}${L.id === r.zeroLoadId ? ' ⌖' : ''}</button>`).join('');
+}
+$('#loadBar').addEventListener('click', e => {
+  const b = e.target.closest('[data-load]'); if (!b) return;
+  const r = active(); r.activeLoadId = b.dataset.load; save(); renderChip(); schedule();
+});
+
+// ---------- карточка поправок (картинка) ----------
+async function drawCard() {
+  const r = active(), e = eff(r), b = bulletById(e.bulletId) || BULLET_DB[0], c = S.cond;
+  const max = S.tableMax, step = S.tableStep;
+  const now = solveR(r, max, step).rows;
+  // ветер 1 м/с поперёк: разница с безветрием (деривация и Кориолис не входят)
+  const calm = solveR(r, max, step, { shot: Object.assign(shotNow(), { windMs: 0 }) }).rows;
+  const w1 = solveR(r, max, step, { shot: Object.assign(shotNow(), { windMs: 1, windClock: 3 }) }).rows;
+  try { await document.fonts.ready; } catch (err) {}
+  const W = 1080, pad = 48, rowH = 54, top = 330, n = now.length;
+  const H = top + rowH * (n + 1) + 200;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  const C = { bg: '#f3f4ef', card: '#ffffff', ink: '#17201b', muted: '#5b675e', line: '#d5dad1', accent: '#d9530b', warn: '#a8670e', soft: '#fbe3d4' };
+  const NUM = '"Fira Sans Extra Condensed", "Arial Narrow", sans-serif', BODY = '"Golos Text", Arial, sans-serif';
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  // шапка
+  g.fillStyle = C.ink; g.fillRect(0, 0, W, 132);
+  g.strokeStyle = C.accent; g.lineWidth = 5; g.beginPath(); g.arc(pad + 30, 66, 24, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = C.accent; g.beginPath(); g.arc(pad + 30, 66, 5, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#ffffff'; g.font = `700 54px ${NUM}`; g.textBaseline = 'middle';
+  g.fillText('ПОПРАВКА', pad + 76, 64);
+  g.font = `500 26px ${BODY}`; g.fillStyle = '#c9d0c6'; g.textAlign = 'right';
+  g.fillText(new Date().toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }), W - pad, 66);
+  g.textAlign = 'left';
+  // винтовка и условия
+  g.fillStyle = C.ink; g.font = `700 44px ${NUM}`; g.fillText(r.name, pad, 182);
+  g.font = `400 25px ${BODY}`; g.fillStyle = C.muted;
+  const bc = e.model === 'G7' && b.bc_g7 ? `G7 ${b.bc_g7}` : b.bc_g1_steps ? 'G1 ступенч.' : `G1 ${b.bc_g1}`;
+  const ln = activeLoad(r).name;
+  g.fillText(`${ln ? ln + ' · ' : ''}${b.maker} ${b.mass_gr}gr ${b.name} · ${fmt(e.v0, Number.isInteger(e.v0) ? 0 : 1)} м/с · ${bc}`, pad, 226);
+  g.fillText(`Пристрелка ${r.zeroM} м · клик ${r.click} ${r.units} · прицел ${fmt(r.sightCm, 1)} см`, pad, 262);
+  g.fillText(`Сейчас: ${c.temp} °C · ${c.pressureMm} мм рт. ст. · ${c.humidity}% · угол ${c.lookDeg}° · ветер ${c.windMs} м/с ${c.windMs ? '(' + Math.round(c.windClock) + ' ч)' : ''}`, pad, 298);
+  // таблица
+  // ширины колонок в сумме = ширине таблицы (W − 2·pad)
+  const cols = [['Дист., м', 128], ['Вверх, кл.', 152], [r.units, 116], ['Вбок, кл.', 140], ['1 м/с, кл.', 140], ['Сниж., см', 158], ['Скор., м/с', 150]];
+  let y = top;
+  g.fillStyle = C.card; g.fillRect(pad - 12, y - 6, W - 2 * pad + 24, rowH * (n + 1) + 12);
+  g.font = `600 22px ${BODY}`; g.fillStyle = C.muted; g.textBaseline = 'middle';
+  let x = pad;
+  for (const [t, w] of cols) { g.textAlign = 'right'; g.fillText(t, x + w - 14, y + rowH / 2); x += w; }
+  y += rowH;
+  now.forEach((row, i) => {
+    if (row.mach < 1) { g.fillStyle = '#f6ead5'; g.fillRect(pad - 12, y, W - 2 * pad + 24, rowH); }
+    else if (i % 2 === 0) { g.fillStyle = '#f7f8f4'; g.fillRect(pad - 12, y, W - 2 * pad + 24, rowH); }
+    const wc = Math.round(row.sideClicks);
+    const per1 = w1[i] && calm[i] ? Math.abs(w1[i].sideClicks - calm[i].sideClicks) : 0;
+    const cells = [fmt(row.range), fmt(Math.round(row.dropClicks)), fmt(-row.dropAng, 1), wc === 0 ? '0' : Math.abs(wc) + (wc > 0 ? ' ▶' : ' ◀'), fmt(per1, 1), fmt(-row.dropCm), fmt(row.v)];
+    let xx = pad;
+    cells.forEach((t, j) => {
+      g.textAlign = 'right';
+      g.font = `${j <= 1 || j === 3 ? 700 : 500} ${j <= 1 ? 32 : 28}px ${NUM}`;
+      g.fillStyle = row.mach < 1 ? C.warn : (j === 1 ? C.accent : C.ink);
+      g.fillText(t, xx + cols[j][1] - 14, y + rowH / 2 + 1);
+      xx += cols[j][1];
+    });
+    g.strokeStyle = C.line; g.lineWidth = 1; g.beginPath(); g.moveTo(pad - 12, y + rowH); g.lineTo(W - pad + 12, y + rowH); g.stroke();
+    y += rowH;
+  });
+  // пояснения
+  y += 40; g.textAlign = 'left'; g.font = `400 23px ${BODY}`; g.fillStyle = C.muted;
+  ['«Вбок» — с текущим ветром. «1 м/с» — поправка на каждый 1 м/с',
+   'поперечного ветра: умножьте на скорость ветра.',
+   'Ветер справа — крутить вправо, слева — влево. Жёлтым — дозвук.'].forEach((t, i) => g.fillText(t, pad, y + i * 32));
+  g.font = `600 22px ${BODY}`; g.fillStyle = C.accent; g.fillText('Проверяйте поправки стрельбой — расчёт это отправная точка.', pad, y + 108);
+  return cv;
+}
+
+const isNative = () => !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+let cardBlob = null, cardUrl = null;
+$('#cardBtn').addEventListener('click', async () => {
+  $('#cardBtn').disabled = true;
+  try {
+    const cv = await drawCard();
+    cardBlob = await new Promise(res => cv.toBlob(res, 'image/png'));
+    if (cardUrl) URL.revokeObjectURL(cardUrl);
+    cardUrl = URL.createObjectURL(cardBlob);
+    $('#cardImg').src = cardUrl;
+    $('#cardDl').href = cardUrl;
+    $('#cardDl').download = `popravka-${active().name.replace(/[^\wа-яё.-]+/gi, '_')}.png`;
+    $('#cardDl').hidden = isNative();
+    $('#cardBack').hidden = false;
+  } catch (err) { toast('Не получилось нарисовать карточку'); }
+  $('#cardBtn').disabled = false;
+});
+$('#cardClose').addEventListener('click', () => { $('#cardBack').hidden = true; });
+$('#cardBack').addEventListener('click', e => { if (e.target.id === 'cardBack') $('#cardBack').hidden = true; });
+$('#cardShare').addEventListener('click', async () => {
+  if (!cardBlob) return;
+  const name = $('#cardDl').download || 'popravka.png';
+  try {
+    if (isNative()) {
+      // Android-приложение: сохраняем во временную папку и открываем системное «Поделиться»
+      const b64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(cardBlob); });
+      const Filesystem = Capacitor.registerPlugin('Filesystem'), Share = Capacitor.registerPlugin('Share');
+      const { uri } = await Filesystem.writeFile({ path: name, data: b64, directory: 'CACHE' });
+      await Share.share({ title: 'Карточка поправок', files: [uri] });
+      return;
+    }
+    const file = new File([cardBlob], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Карточка поправок' }); return; }
+    $('#cardDl').click();
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;          // человек сам закрыл окно «Поделиться»
+    if (String(err && err.message || '').toLowerCase().includes('cancel')) return;
+    toast('Не получилось поделиться — сохраните картинку долгим нажатием');
+  }
 });
 
 // ---------- навигация ----------

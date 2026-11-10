@@ -4,7 +4,7 @@
 
 Делает: index.html (ядро + база пуль внутри), manifest, service worker со списком файлов.
 """
-import hashlib, json, os, re
+import hashlib, json, os, re, shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC, WWW = os.path.join(ROOT, "src"), os.path.join(ROOT, "www")
@@ -32,6 +32,14 @@ html = must_replace(html, """<link rel="preconnect" href="https://fonts.googleap
 <meta name="apple-mobile-web-app-title" content="Поправка">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">""")
+
+# мост к Android-приложению (Capacitor): нужен для «Поделиться» и сохранения файлов
+CAP_JS = os.path.join(ROOT, "node_modules", "@capacitor", "core", "dist", "capacitor.js")
+if os.path.exists(CAP_JS):
+    shutil.copy(CAP_JS, os.path.join(WWW, "capacitor.js"))
+    html = must_replace(html, "</head>", '<script src="./capacitor.js"></script>\n</head>')
+else:
+    print("ВНИМАНИЕ: нет node_modules/@capacitor/core — выполните npm ci; «Поделиться» в Android работать не будет")
 
 # отступы под вырез экрана / строку состояния в режиме приложения
 html = must_replace(html, '<meta name="viewport" content="width=device-width, initial-scale=1">',
