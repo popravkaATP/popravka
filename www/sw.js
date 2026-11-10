@@ -1,5 +1,5 @@
 // Service worker «Поправки»: хранит приложение в телефоне, чтобы оно работало без интернета.
-const CACHE = 'popravka-aa4101e6ef';
+const CACHE = 'popravka-bf8579b26a';
 const ASSETS = [
  "./",
  "./fonts/fira-sans-extra-condensed-cyrillic-500-normal.woff2",
