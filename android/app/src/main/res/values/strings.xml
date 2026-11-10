@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Поправка</string>
+    <string name="title_activity_main">Поправка</string>
+    <string name="package_name">app.popravka.ballistic</string>
+    <string name="custom_url_scheme">app.popravka.ballistic</string>
+</resources>

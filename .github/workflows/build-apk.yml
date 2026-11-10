@@ -1,0 +1,74 @@
+# Собирает APK для Android при каждом изменении и выкладывает его в раздел Releases.
+name: Сборка APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_B64: ${{ secrets.POPRAVKA_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Сборка веб-части
+        run: python3 tools/build.py
+
+      - name: Копирование в Android-проект
+        run: npx cap sync android
+
+      - name: Ключ подписи из секретов (если задан)
+        if: ${{ env.KEYSTORE_B64 != '' }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > android/app/private.keystore
+          echo "POPRAVKA_KEYSTORE=private.keystore" >> "$GITHUB_ENV"
+
+      - name: Сборка APK
+        working-directory: android
+        env:
+          POPRAVKA_STORE_PASSWORD: ${{ secrets.POPRAVKA_STORE_PASSWORD }}
+          POPRAVKA_KEY_ALIAS: ${{ secrets.POPRAVKA_KEY_ALIAS }}
+          POPRAVKA_KEY_PASSWORD: ${{ secrets.POPRAVKA_KEY_PASSWORD }}
+        run: |
+          # пустые секреты не должны затирать значения по умолчанию
+          for v in POPRAVKA_STORE_PASSWORD POPRAVKA_KEY_ALIAS POPRAVKA_KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../popravka.apk
+
+      - name: Сохранить APK как артефакт сборки
+        uses: actions/upload-artifact@v4
+        with:
+          name: popravka-apk
+          path: popravka.apk
+
+      - name: Выложить в Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest popravka.apk \
+            --title "Поправка — последняя версия (сборка ${{ github.run_number }})" \
+            --notes "Скачайте popravka.apk на Android-телефон и откройте файл. При первой установке разрешите установку из этого источника." \
+            --latest
