@@ -456,7 +456,13 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
         </div>
         <div class="card">
           <h2>Резервная копия</h2>
-          <p class="hint" style="margin:0 0 10px">Профили хранятся в этом браузере. Сохраните копию, чтобы перенести их на другой телефон.</p>
+          <p class="hint" style="margin:0 0 10px">Профили хранятся только в этом телефоне. Сохраните копию файлом — на случай потери телефона или чтобы перенести профили на другой.</p>
+          <div class="row-btns" style="justify-content:flex-start">
+            <button class="btn accent" type="button" id="fileSaveBtn">Сохранить в файл</button>
+            <button class="btn" type="button" id="fileLoadBtn">Загрузить из файла</button>
+            <input type="file" id="fileLoadInput" hidden>
+          </div>
+          <p class="hint" style="margin:12px 0 6px">Или текстом — через заметки или мессенджер:</p>
           <div class="row-btns" style="justify-content:flex-start">
             <button class="btn" type="button" id="exportBtn">Скопировать профили</button>
             <button class="btn" type="button" id="importToggle">Вставить из копии</button>
@@ -1349,18 +1355,63 @@ $('#editor').addEventListener('submit', e => {
 $('#addRifle').addEventListener('click', () => openEditor(null));
 
 
+// ---------- резервная копия ----------
+// одна и та же копия и для файла, и для текста; старые копии (только rifles + custom) тоже читаются
+function backupData() {
+  return { app: 'popravka', format: 1, saved: new Date().toISOString(), rifles: S.rifles, custom: S.custom, activeId: S.activeId };
+}
+function applyBackup(d) {
+  if (!d || !Array.isArray(d.rifles) || !d.rifles.length) throw new Error('bad backup');
+  const was = S.rifles.filter(r => !r.example).length;
+  if (was && !confirm(`Заменить ваши винтовки (${was}) на винтовки из копии (${d.rifles.length})?`)) return false;
+  S.custom = Array.isArray(d.custom) ? d.custom : [];
+  S.rifles = d.rifles.map(migrateRifle);
+  S.activeId = S.rifles.some(r => r.id === d.activeId) ? d.activeId : S.rifles[0].id;
+  save(); renderRifleList(); renderChip();
+  toast(`Загружено винтовок: ${S.rifles.length}`);
+  return true;
+}
+const blobToB64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
+const isCancel = err => (err && err.name === 'AbortError') || String(err && err.message || '').toLowerCase().includes('cancel');
+// отдать файл человеку: в Android-приложении и на телефоне — окно «Поделиться» (там есть «Сохранить в Файлы»/Диск), на компьютере — скачивание
+async function giveFile(blob, name, title) {
+  if (isNative()) {
+    const Filesystem = Capacitor.registerPlugin('Filesystem'), Share = Capacitor.registerPlugin('Share');
+    const { uri } = await Filesystem.writeFile({ path: name, data: await blobToB64(blob), directory: 'CACHE' });
+    await Share.share({ title, files: [uri] });
+    return;
+  }
+  const file = new File([blob], name, { type: blob.type });
+  const touch = matchMedia('(pointer: coarse)').matches;
+  if (touch && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title }); return; }
+  const a = document.createElement('a'), url = URL.createObjectURL(blob);
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+$('#fileSaveBtn').addEventListener('click', async () => {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  const name = `popravka-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.json`;
+  const blob = new Blob([JSON.stringify(backupData(), null, 1)], { type: 'application/json' });
+  try { await giveFile(blob, name, 'Резервная копия «Поправки»'); }
+  catch (err) { if (!isCancel(err)) toast('Не получилось сохранить файл — используйте «Скопировать профили»'); }
+});
+$('#fileLoadBtn').addEventListener('click', () => { $('#fileLoadInput').value = ''; $('#fileLoadInput').click(); });
+$('#fileLoadInput').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  try { applyBackup(JSON.parse(await f.text())); }
+  catch (err) { toast('Это не файл копии «Поправки»'); }
+});
+
 $('#exportBtn').addEventListener('click', async () => {
-  const data = JSON.stringify({ rifles: S.rifles, custom: S.custom });
+  const data = JSON.stringify(backupData());
   try { await navigator.clipboard.writeText(data); toast('Скопировано. Сохраните текст в заметках'); }
   catch (e) { $('#importBox').hidden = false; $('#importText').value = data; $('#importText').select(); toast('Скопируйте текст из поля вручную'); }
 });
 $('#importToggle').addEventListener('click', () => { $('#importBox').hidden = !$('#importBox').hidden; });
 $('#importBtn').addEventListener('click', () => {
   try {
-    const d = JSON.parse($('#importText').value);
-    if (!Array.isArray(d.rifles) || !d.rifles.length) throw 0;
-    S.custom = d.custom || []; S.rifles = d.rifles.map(migrateRifle); S.activeId = S.rifles[0].id; save();
-    renderRifleList(); renderChip(); $('#importBox').hidden = true; toast(`Загружено винтовок: ${S.rifles.length}`);
+    if (applyBackup(JSON.parse($('#importText').value))) $('#importBox').hidden = true;
   } catch (e) { toast('Не получилось прочитать текст копии'); }
 });
 
@@ -1750,9 +1801,8 @@ $('#cardShare').addEventListener('click', async () => {
   try {
     if (isNative()) {
       // Android-приложение: сохраняем во временную папку и открываем системное «Поделиться»
-      const b64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(cardBlob); });
       const Filesystem = Capacitor.registerPlugin('Filesystem'), Share = Capacitor.registerPlugin('Share');
-      const { uri } = await Filesystem.writeFile({ path: name, data: b64, directory: 'CACHE' });
+      const { uri } = await Filesystem.writeFile({ path: name, data: await blobToB64(cardBlob), directory: 'CACHE' });
       await Share.share({ title: 'Карточка поправок', files: [uri] });
       return;
     }
@@ -1780,7 +1830,7 @@ function show() {
 window.addEventListener('hashchange', show);
 
 // ---------- сообщение «Есть обновление» ----------
-const APP_VERSION = '3fb0036f75';   // подставляет tools/build.py
+const APP_VERSION = '7e431fd7eb';   // подставляет tools/build.py
 const APK_URL = 'https://github.com/popravkaATP/popravka/releases/download/latest/popravka.apk';
 let updAction = null;
 function showUpdate(text, btn, action) {
