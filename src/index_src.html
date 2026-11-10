@@ -257,6 +257,10 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
 .example-note a { color: var(--ink); font-weight: 600; }
 .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
 .toast.show { opacity: 1; }
+.upd { position: fixed; left: 50%; top: calc(10px + env(safe-area-inset-top)); transform: translateX(-50%); width: min(520px, calc(100% - 24px)); z-index: 30;
+  background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18);
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+.upd span { flex: 1 1 180px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -463,6 +467,7 @@ nav.tabs a[aria-current="page"] { color: var(--accent); }
   </section>
 </div>
 <div class="toast" id="toast" role="status"></div>
+<div class="upd" id="upd" role="alert" hidden><span id="updText"></span><button class="btn accent" type="button" id="updGo"></button><button class="btn" type="button" id="updLater">Позже</button></div>
 <div class="sensor-back" id="cardBack" hidden>
   <div class="sensor card-sheet" role="dialog" aria-modal="true" aria-labelledby="cardTitle">
     <h3 id="cardTitle">Карточка поправок</h3>
@@ -1621,6 +1626,32 @@ function show() {
   if (r === 'rifles') renderRifleList();
 }
 window.addEventListener('hashchange', show);
+
+// ---------- сообщение «Есть обновление» ----------
+const APP_VERSION = '/*APP_VERSION*/';   // подставляет tools/build.py
+const APK_URL = 'https://github.com/popravkaATP/popravka/releases/download/latest/popravka.apk';
+let updAction = null;
+function showUpdate(text, btn, action) {
+  $('#updText').textContent = text; $('#updGo').textContent = btn; updAction = action; $('#upd').hidden = false;
+}
+$('#updGo').addEventListener('click', () => { if (updAction) updAction(); });
+$('#updLater').addEventListener('click', () => { $('#upd').hidden = true; updAction = null; });
+
+// Android-приложение: сверяем свою версию с последней сборкой в GitHub Releases (нужен интернет, без него — молча)
+let updCheckedAt = 0;
+async function checkApkUpdate() {
+  if (!isNative() || !/^[0-9a-f]{10}$/.test(APP_VERSION) || Date.now() - updCheckedAt < 3600e3) return;
+  updCheckedAt = Date.now();
+  try {
+    const r = await fetch('https://api.github.com/repos/popravkaATP/popravka/releases/tags/latest', { cache: 'no-store' });
+    if (!r.ok) return;
+    const m = /Версия:\s*([0-9a-f]{10})/.exec((await r.json()).body || '');
+    if (m && m[1] !== APP_VERSION)
+      showUpdate('Вышла новая версия «Поправки». Скачайте и установите её поверх — профили сохранятся.', 'Скачать', () => { location.href = APK_URL; });
+  } catch (e) {}
+}
+checkApkUpdate();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkApkUpdate(); });
 
 renderChip(); renderDistance(); fillConditions(); renderClock(); renderAz(); renderWx(); show();
 </script>

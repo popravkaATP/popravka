@@ -68,7 +68,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --yes --cleanup-tag || true
+          VER=$(python3 -c "import json; print(json.load(open('www/version.json'))['version'])")
           gh release create latest popravka.apk \
             --title "Поправка — последняя версия (сборка ${{ github.run_number }})" \
-            --notes "Скачайте popravka.apk на Android-телефон и откройте файл. При первой установке разрешите установку из этого источника." \
+            --notes "Скачайте popravka.apk на Android-телефон и откройте файл. При первой установке разрешите установку из этого источника.
+
+          Версия: $VER" \
             --latest

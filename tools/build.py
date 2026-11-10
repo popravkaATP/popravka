@@ -55,14 +55,28 @@ html = must_replace(html, "renderChip(); renderDistance(); fillConditions(); ren
   if (native || !('serviceWorker' in navigator)) return;
   if (location.protocol !== 'https:' && location.hostname !== 'localhost') return;
   const hadController = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  let reg = null;
+  navigator.serviceWorker.register('./sw.js').then(r => { reg = r; }).catch(() => {});
+  // новая версия скачалась и включилась — предлагаем перезагрузить страницу
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (hadController) toast('Приложение обновлено — перезапустите его');
+    if (hadController) showUpdate('Есть обновление «Поправки».', 'Обновить', () => location.reload());
+  });
+  // приложение часто не закрывают — при возврате к нему проверяем, не вышла ли новая версия
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && reg) reg.update().catch(() => {});
   });
 })();""")
 
 # безопасные зоны: в Android-приложении Capacitor передаёт их через --safe-area-inset-*, в браузере работает env()
 html = re.sub(r"env\(safe-area-inset-(\w+)\)", r"var(--safe-area-inset-\1, env(safe-area-inset-\1))", html)
+
+# версия по исходникам — одинаковая у сайта и APK из одного коммита (по ней Android-приложение узнаёт об обновлении)
+_vh = hashlib.sha256()
+for _p in ("index_src.html", "engine.js", "bullets_db.json"): _vh.update(read(_p).encode("utf-8"))
+_vh.update(open(os.path.abspath(__file__), "rb").read())
+APP_VERSION = _vh.hexdigest()[:10]
+html = must_replace(html, "/*APP_VERSION*/", APP_VERSION)
+json.dump({"version": APP_VERSION}, open(os.path.join(WWW, "version.json"), "w"))
 
 html = html.replace("/*ENGINE*/", engine).replace("/*BULLETS*/", json.dumps(bullets, ensure_ascii=False))
 open(os.path.join(WWW, "index.html"), "w", encoding="utf-8").write(html)
@@ -117,4 +131,4 @@ self.addEventListener('fetch', e => {{
 }});
 """
 open(os.path.join(WWW, "sw.js"), "w", encoding="utf-8").write(sw)
-print(f"www/ собран, версия {version}, файлов в офлайн-кэше: {len(set(assets))}")
+print(f"www/ собран, версия приложения {APP_VERSION}, кэш {version}, файлов в офлайн-кэше: {len(set(assets))}")
