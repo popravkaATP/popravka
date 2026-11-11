@@ -74,7 +74,7 @@ html = re.sub(r"env\(safe-area-inset-(\w+)\)", r"var(--safe-area-inset-\1, env(s
 
 # версия по исходникам — одинаковая у сайта и APK из одного коммита (по ней Android-приложение узнаёт об обновлении)
 _vh = hashlib.sha256()
-for _p in ("index_src.html", "engine.js", "bullets_db.json"): _vh.update(read(_p).encode("utf-8"))
+for _p in ("index_src.html", "engine.js", "bullets_db.json", "cartridges_db.json"): _vh.update(read(_p).encode("utf-8"))
 _vh.update(open(os.path.abspath(__file__), "rb").read())
 APP_VERSION = _vh.hexdigest()[:10]
 html = must_replace(html, "/*APP_VERSION*/", APP_VERSION)
