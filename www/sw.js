@@ -1,5 +1,5 @@
 // Service worker «Поправки»: хранит приложение в телефоне, чтобы оно работало без интернета.
-const CACHE = 'popravka-2f21c57bb9';
+const CACHE = 'popravka-279a54190c';
 const ASSETS = [
  "./",
  "./capacitor.js",

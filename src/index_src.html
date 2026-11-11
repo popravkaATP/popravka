@@ -206,6 +206,10 @@ tr.cur td { background: var(--accent-soft); }
 .bullet-opt small { display: block; color: var(--muted); font-size: 12.5px; }
 .bullet-opt[aria-pressed="true"] { border: 2px solid var(--accent); }
 .bullet-opt .muted { color: var(--muted); font-weight: 400; }
+.picked { display: flex; gap: 10px; align-items: center; justify-content: space-between; border: 2px solid var(--accent); border-radius: 10px; padding: 9px 12px; background: var(--paper); }
+.picked b { font-weight: 600; } .picked .muted { color: var(--muted); font-weight: 400; }
+.picked small { display: block; color: var(--muted); font-size: 12.5px; }
+details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .grp-head { margin: 6px 0 0; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .pill { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 600; }
 .pill.ok { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
@@ -1117,13 +1121,15 @@ function renderEditor() {
     <div class="chips" id="eLoads">${d.loads.map(l => `<button type="button" class="chip" data-lid="${l.id}" aria-pressed="${l.id === L.id}">${esc(loadLabel(l))}${l.id === d.zeroLoadId && d.loads.length > 1 ? ' ⌖' : ''}</button>`).join('')}
       <button type="button" class="chip" data-addload="1">+ Ещё патрон</button></div>
     ${d.loads.length > 1 ? '<span class="hint">⌖ — этим патроном пристрелян прицел.</span>' : ''}
-    <div class="f"><label for="eLName">Название патрона (необязательно)</label><input type="text" id="eLName" value="${esc(L.name || '')}" placeholder="Например: охотничий, матчевый"></div>
     <div class="f"><label>Откуда патрон</label>${seg('src', [['f', 'Заводской патрон'], ['b', 'Пуля (самокрут)']], d._src, 'Откуда патрон')}
       <span class="hint">${d._src === 'f' ? 'Готовые патроны из магазина: вес пули, BC и скорость подставятся сами.' : 'Для тех, кто снаряжает патроны сам: выберите пулю, скорость укажите свою.'}</span></div>
-    ${d._src === 'f' ? `<div class="f"><label for="eFq">Патрон</label><input type="search" id="eFq" placeholder="Поиск: geco 11, rws evo, s&b 180…">
-      ${isFactory(b) ? `<span class="hint">Выбрано: <b>${esc(bFull(b))}</b></span>` : '<span class="hint">Выберите патрон в списке ниже</span>'}</div>
-    <div class="bullet-results" id="eFres"></div>
-    <span class="hint">Нет вашего патрона? Нажмите «Пуля (самокрут)»: там можно найти пулю или ввести вес и BC с коробки вручную.</span>` : `<div class="f"><label for="eBq">Пуля</label><input type="search" id="eBq" placeholder="Поиск: 308 175, 7н1, 5.45, lapua…">
+    ${d._src === 'f' && isFactory(b) && !d._pick ? `<div class="f"><label>Патрон</label>
+      <div class="picked"><div><b>${esc(b.maker + ' ' + b.name)} · ${gText(b.mass_g)} <span class="muted">(${b.mass_gr} gr)</span></b>
+        <small>${esc(b.cartridge)} · BC ${b.bc_g7 ? 'G7 ' + b.bc_g7 : 'G1 ' + (b.approx ? '≈' : '') + b.bc_g1} · ${b.v0_ms} м/с с коробки${b.type ? ' · ' + esc(b.type) : ''}</small></div>
+        <button type="button" class="btn" data-repick="1">Сменить</button></div></div>`
+    : d._src === 'f' ? `<div class="f"><label for="eFq">Патрон</label><input type="search" id="eFq" placeholder="Поиск: geco 11, rws evo, s&b 180…">
+      <span class="hint">Нажмите на свой патрон в списке. Нет его — вкладка «Пуля (самокрут)».</span></div>
+    <div class="bullet-results" id="eFres"></div>` : `<div class="f"><label for="eBq">Пуля</label><input type="search" id="eBq" placeholder="Поиск: 308 175, 7н1, 5.45, lapua…">
       ${b && !isFactory(b) ? `<span class="hint">Выбрано: <b>${esc(bFull(b) + ' · ' + b.caliber)}</b></span>` : '<span class="hint">Найдите пулю в списке ниже</span>'}</div>
     <div class="bullet-results" id="eBres"></div>
     <details id="customBox"><summary class="hint" style="cursor:pointer">Моей пули нет в списке — ввести вручную</summary>
@@ -1135,16 +1141,20 @@ function renderEditor() {
         <button class="btn" type="button" id="cbAdd">Добавить пулю</button>
       </div></details>
 `}
-    ${b && b.bc_g7 ? `<div class="f"><label>Какой BC использовать</label>${seg('md', [['G7', `G7 (${b.bc_g7})`], ['G1', g1Label]], L.model === 'G7' ? 'G7' : 'G1', 'Модель сопротивления')}
+    ${b && b.bc_g7 && !isFactory(b) ? `<div class="f"><label>Какой BC использовать</label>${seg('md', [['G7', `G7 (${b.bc_g7})`], ['G1', g1Label]], L.model === 'G7' ? 'G7' : 'G1', 'Модель сопротивления')}
       <span class="hint">${b.bc_g1_steps ? 'Ступенчатый G1 — так BC публикует Sierra, на дальних дистанциях точнее одного числа.' : 'Для длинных обтекаемых пуль G7 точнее'}</span></div>`
       : b && b.bc_g1_steps ? '<span class="hint">BC ступенчатый — по данным Sierra для разных скоростей.</span>' : ''}
     ${L.bcScale && L.bcScale !== 1 ? `<div class="alert info">BC уточнён по попаданиям: ×${L.bcScale} <button class="btn" type="button" id="eBcReset" style="margin-left:auto">Сбросить</button></div>` : ''}
     ${L.trued ? `<span class="hint">Последнее уточнение: ${L.trued.date}, на ${L.trued.dist} м (${L.trued.par === 'v0' ? 'скорость' : 'BC'}: ${L.trued.from} → ${L.trued.to})</span>` : ''}
-    <div class="two">
-      ${fNum('eV0', 'Скорость пули', L.v0, 'м/с', isFactory(b) ? `С коробки: ${b.v0_ms} м/с${b.barrel_mm ? `, ствол ${b.barrel_mm} мм` : ''}. Ствол короче — скорость ниже. Точнее всего — хронограф` : 'Лучше по хронографу')}
-      ${fNum('ePref', 'Измерена при', L.powderRefTemp, '°C', 'Температура патронов')}
-    </div>
-    ${fNum('eSens', 'Термочувствительность пороха', L.powderSens, 'м/с на 1 °C', '0 — не учитывать. Обычно 0.3–1.5')}
+    ${fNum('eV0', 'Скорость пули', L.v0, 'м/с', isFactory(b) ? `С коробки${b.barrel_mm ? ` (ствол ${b.barrel_mm} мм)` : ''}. Если ствол короче или есть хронограф — поправьте` : 'Лучше по хронографу')}
+    <details class="more" ${L.name || L.powderSens ? 'open' : ''}><summary>Дополнительно: название патрона, порох</summary>
+      <div class="stack" style="margin-top:10px">
+        <div class="f"><label for="eLName">Название патрона</label><input type="text" id="eLName" value="${esc(L.name || '')}" placeholder="Например: охотничий, матчевый"></div>
+        <div class="two">
+          ${fNum('eSens', 'Термочувствительность пороха', L.powderSens, 'м/с на 1 °C', '0 — не учитывать. Обычно 0.3–1.5')}
+          ${fNum('ePref', 'Скорость измерена при', L.powderRefTemp, '°C', 'Температура патронов')}
+        </div>
+      </div></details>
     ${d.loads.length > 1 ? `<label class="switch"><input type="checkbox" id="eZeroL" ${d.zeroLoadId === L.id ? 'checked' : ''}> Прицел пристрелян этим патроном</label>
       <span class="hint">Для остальных патронов программа учтёт, что при той же установке прицела они попадают в другое место.</span>
       <button class="btn danger" type="button" id="eDelLoad">Удалить этот патрон</button>` : ''}
@@ -1253,7 +1263,7 @@ $('#editor').addEventListener('input', e => {
     const c = findCal(e.target.value);
     document.querySelectorAll('#calChips .chip').forEach(b => b.setAttribute('aria-pressed', String(!!c && b.dataset.cal === c.name)));
     if (c && e.inputType === undefined) { $(`#calChips [data-cal="${c.name}"]`)?.click(); return; }   // выбрано из списка
-    if ($('#eBq')) renderBulletResults($('#eBq').value); else renderFactoryResults($('#eFq').value);
+    if ($('#eBq')) renderBulletResults($('#eBq').value); else renderFactoryResults($('#eFq')?.value || '');
   }
   if (e.target.id === 'eLName') $(`#eLoads [data-lid="${curL().id}"]`).textContent = loadLabel(curL());
 });
@@ -1261,7 +1271,7 @@ $('#editor').addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
   const L = curL();
   if (t.dataset.bid) {
-    readEditor(); L.bulletId = t.dataset.bid; const b = bulletById(t.dataset.bid);
+    readEditor(); L.bulletId = t.dataset.bid; draft._pick = false; const b = bulletById(t.dataset.bid);
     if (isFactory(b)) {
       // заводской патрон: скорость с коробки, BC — как публикует производитель (у Geco и RWS только G1)
       L.v0 = b.v0_ms; L.model = b.bc_g7 ? 'G7' : 'G1'; L.bcScale = 1; delete L.trued;
@@ -1272,6 +1282,7 @@ $('#editor').addEventListener('click', e => {
     L.model = b.bc_g7 ? (L.model || 'G7') : 'G1'; renderEditor(); return;
   }
   if (t.dataset.src) { readEditor(); draft._src = t.dataset.src; renderEditor(); return; }
+  if (t.dataset.repick) { readEditor(); draft._pick = true; renderEditor(); $('#eFq').focus(); return; }
   if (t.dataset.cal) {
     readEditor();
     const c = findCal(t.dataset.cal);
@@ -1293,7 +1304,7 @@ $('#editor').addEventListener('click', e => {
   if (t.dataset.ru) { readEditor(); draft.retUnits = t.dataset.ru; if (draft.retUnits !== 'MRAD' && draft.reticle === 'mildot') draft.reticle = 'hash'; renderEditor(); return; }
   if (t.dataset.fp) { readEditor(); draft.focal = t.dataset.fp; if (!draft.curMag) draft.curMag = draft.sfpMag; renderEditor(); return; }
   if (t.dataset.md) { readEditor(); L.model = t.dataset.md; renderEditor(); return; }
-  if (t.dataset.lid) { readEditor(); draft._loadId = t.dataset.lid; draft._src = srcOf(curL()); renderEditor(); return; }
+  if (t.dataset.lid) { readEditor(); draft._loadId = t.dataset.lid; draft._src = srcOf(curL()); draft._pick = false; renderEditor(); return; }
   if (t.dataset.addload) {
     readEditor();
     const nl = { id: 'l' + uid(), name: '', bulletId: '', model: 'G7', v0: L.v0, powderRefTemp: L.powderRefTemp, powderSens: L.powderSens };
@@ -1338,7 +1349,7 @@ $('#editor').addEventListener('submit', e => {
   }
   const isNew = draft._isNew;
   draft.activeLoadId = draft._loadId || draft.activeLoadId;
-  delete draft._isNew; delete draft._loadId; delete draft._src;
+  delete draft._isNew; delete draft._loadId; delete draft._src; delete draft._pick;
   migrateRifle(draft);
   if (isNew) {
     S.rifles = S.rifles.filter(r => !r.example);   // пример убираем, когда появилась своя
