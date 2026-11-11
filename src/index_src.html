@@ -205,6 +205,8 @@ tr.cur td { background: var(--accent-soft); }
 .bullet-opt b { font-weight: 600; }
 .bullet-opt small { display: block; color: var(--muted); font-size: 12.5px; }
 .bullet-opt[aria-pressed="true"] { border: 2px solid var(--accent); }
+.bullet-opt .muted { color: var(--muted); font-weight: 400; }
+.grp-head { margin: 6px 0 0; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .pill { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 600; }
 .pill.ok { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
 .pill.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
@@ -596,6 +598,13 @@ function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } ca
 
 const allBullets = () => BULLET_DB.concat(S.custom);
 const bulletById = id => allBullets().find(b => b.id === id);
+// заводской патрон (Geco, RWS, S&B, Lapua…) — у него есть скорость с коробки и вес в граммах
+const isFactory = b => !!b && b.kind === 'factory';
+const gText = g => fmt(g, 1) + ' г';
+// коротко: «Geco Plus 11,0 г» или «Hornady 168gr»
+const bShort = b => isFactory(b) ? `${b.maker} ${b.name} ${gText(b.mass_g)}` : `${b.maker} ${b.mass_gr}gr`;
+// полностью: «Geco Plus .308 Win, 11,0 г (170 gr)» или «Hornady 168gr ELD Match»
+const bFull = b => isFactory(b) ? `${b.maker} ${b.name} ${b.cartridge}, ${gText(b.mass_g)} (${b.mass_gr} gr)` : `${b.maker} ${b.mass_gr}gr ${b.name}`;
 const active = () => S.rifles.find(r => r.id === S.activeId) || S.rifles[0];
 
 // ---------- утилиты ----------
@@ -655,7 +664,7 @@ const zeroLoadOf = r => r.loads.find(l => l.id === r.zeroLoadId) || r.loads[0];
 function eff(r, L = activeLoad(r)) { const { id, name, ...rest } = L; return Object.assign({}, r, rest, { loadName: name || '' }); }
 function loadLabel(L) {
   const b = bulletById(L.bulletId);
-  return L.name || (b ? `${b.maker} ${b.mass_gr}gr` : 'Патрон без пули');
+  return L.name || (b ? bShort(b) : 'Патрон не выбран');
 }
 // расчёт для винтовки с учётом пристрелочного патрона; opt.load — временные правки патрона (для уточнения)
 function solveR(r, maxR, step, opt = {}) {
@@ -681,7 +690,7 @@ function shotNow() {
 function renderChip() {
   const r = active(), e = eff(r), b = bulletById(e.bulletId);
   $('#chipName').textContent = r.name;
-  $('#chipSub').textContent = `${b ? b.maker + ' ' + b.mass_gr + 'gr' : 'пуля?'} · ${e.v0} м/с · пристрелка ${r.zeroM} м`;
+  $('#chipSub').textContent = `${b ? bShort(b) : 'пуля?'} · ${e.v0} м/с · пристрелка ${r.zeroM} м`;
   renderLoadBar();
   $('#chipDot').textContent = (r.caliber.match(/[\d.,]+/) || ['•'])[0].replace(/^\./, '').slice(0, 4);
   $('#exampleNote').hidden = !r.example;
@@ -923,7 +932,7 @@ function computeTable() {
   $('#tbl').innerHTML = h + '</tbody>';
   const c = S.cond;
   $('#tblLegend').textContent = `Условия: ${c.temp} °C, ${c.pressureMm} мм рт. ст., ветер ${c.windMs} м/с ${c.windMs ? CLOCK_TEXT[Math.round(c.windClock)] : ''}, угол ${c.lookDeg}°. ` +
-    `Патрон: ${loadLabel(activeLoad(r))}, ${b.maker} ${b.mass_gr}gr, ${e.v0} м/с. Жёлтым — дозвук. ◀ ▶ — куда крутить горизонталь.` +
+    `Патрон: ${loadLabel(activeLoad(r))}, ${bFull(b)}, ${e.v0} м/с. Жёлтым — дозвук. ◀ ▶ — куда крутить горизонталь.` +
     (mv ? ` Упреждение — для цели ${c.moveKmh} км/ч ${c.moveDir > 0 ? 'вправо' : 'влево'}.` : '') + ' Условия меняются на вкладке «Выстрел».';
 }
 
@@ -1005,7 +1014,7 @@ function renderRifleList() {
   $('#rifleList').innerHTML = S.rifles.map(r => {
     const e = eff(r), b = bulletById(e.bulletId);
     return `<div class="rifle-card ${r.id === S.activeId ? 'active' : ''}">
-      <div><h3>${esc(r.name)}</h3><p>${esc(r.caliber)} · ${b ? esc(b.maker + ' ' + b.mass_gr + 'gr ' + b.name) : 'пуля не выбрана'}<br>${e.v0} м/с · пристрелка ${r.zeroM} м · клик ${r.click} ${r.units}${r.loads.length > 1 ? ' · патронов: ' + r.loads.length : ''}${e.trued ? ' · уточнено ' + e.trued.date : ''}</p></div>
+      <div><h3>${esc(r.name)}</h3><p>${esc(r.caliber)} · ${b ? esc(bFull(b)) : 'пуля не выбрана'}<br>${e.v0} м/с · пристрелка ${r.zeroM} м · клик ${r.click} ${r.units}${r.loads.length > 1 ? ' · патронов: ' + r.loads.length : ''}${e.trued ? ' · уточнено ' + e.trued.date : ''}</p></div>
       <div class="row-btns">
         ${r.id === S.activeId ? '<span class="pill ok">Выбрана</span>' : `<button class="btn primary" type="button" data-act="use" data-id="${r.id}">Выбрать</button>`}
         <button class="btn" type="button" data-act="edit" data-id="${r.id}">Изменить</button>
@@ -1022,23 +1031,35 @@ $('#rifleList').addEventListener('click', e => {
 // Популярные калибры: типичный шаг нарезов и метки калибра пуль в базе
 const CALIBERS = [
   { name: '.308 Win', twist: 10, keys: ['.308'] },
+  { name: '.30-06', twist: 10, keys: ['.308'] },
+  { name: '7×64', twist: 8.66, keys: ['7mm'] },
+  { name: '8×57 JS', twist: 9.45, keys: [] },
+  { name: '9.3×62', twist: 14, keys: [] },
   { name: '6.5 Creedmoor', twist: 8, keys: ['6.5mm'] },
   { name: '.223 Rem / 5.56', twist: 8, keys: ['.223', '.224'] },
   { name: '7.62×54R', twist: 9.45, keys: ['54R'] },
   { name: '7.62×39', twist: 9.45, keys: ['7,62×39'] },
   { name: '5.45×39', twist: 7.7, keys: ['5,45×39'] },
-  { name: '.30-06', twist: 10, keys: ['.308'] },
   { name: '.300 Win Mag', twist: 10, keys: ['.308'] },
   { name: '.338 Lapua Mag', twist: 10, keys: ['.338'] },
   { name: '6mm Creedmoor', twist: 7.5, keys: ['6mm'] },
   { name: '.243 Win', twist: 10, keys: ['6mm'] },
   { name: '6.5×55', twist: 7.87, keys: ['6.5mm'] },
   { name: '7mm Rem Mag', twist: 9.5, keys: ['7mm'] },
+  { name: '.270 Win', twist: 10, keys: [] },
+  { name: '.222 Rem', twist: 14, keys: ['.223', '.224'] },
+  { name: '7×57', twist: 8.66, keys: ['7mm'] },
+  { name: '7×57R', twist: 8.66, keys: ['7mm'] },
+  { name: '7×65R', twist: 8.66, keys: ['7mm'] },
+  { name: '8×57 JRS', twist: 9.45, keys: [] },
+  { name: '9.3×74R', twist: 14, keys: [] },
 ];
 const calNorm = t => String(t || '').toLowerCase().replace(/[\s.,]/g, '').replace(/[×хx]/g, 'x');
 const findCal = name => CALIBERS.find(c => calNorm(c.name) === calNorm(name) || calNorm(c.name).split('/')[0] === calNorm(name));
 let draft = null;
 const curL = () => draft.loads.find(l => l.id === draft._loadId) || draft.loads[0];
+// какую вкладку показать для патрона: заводской (по умолчанию) или пуля-самокрут
+const srcOf = L => { const b = bulletById(L.bulletId); return b && !isFactory(b) ? 'b' : 'f'; };
 function openEditor(r) {
   draft = r ? JSON.parse(JSON.stringify(r)) : migrateRifle({
     id: uid(), name: '', caliber: '.308 Win', sightCm: 4.5, twistIn: 10, twistRight: true, units: 'MRAD', click: 0.1,
@@ -1046,6 +1067,7 @@ function openEditor(r) {
   });
   draft._isNew = !r;
   draft._loadId = draft.activeLoadId;
+  draft._src = srcOf(curL());
   delete draft.example;
   $('#editorCard').hidden = false;
   renderEditor();
@@ -1096,8 +1118,13 @@ function renderEditor() {
       <button type="button" class="chip" data-addload="1">+ Ещё патрон</button></div>
     ${d.loads.length > 1 ? '<span class="hint">⌖ — этим патроном пристрелян прицел.</span>' : ''}
     <div class="f"><label for="eLName">Название патрона (необязательно)</label><input type="text" id="eLName" value="${esc(L.name || '')}" placeholder="Например: охотничий, матчевый"></div>
-    <div class="f"><label for="eBq">Пуля</label><input type="search" id="eBq" placeholder="Поиск: 308 175, 7н1, 5.45, lapua…">
-      ${b ? `<span class="hint">Выбрано: <b>${esc(b.maker + ' ' + b.caliber + ' ' + b.mass_gr + 'gr ' + b.name)}</b></span>` : '<span class="hint">Найдите пулю в списке ниже</span>'}</div>
+    <div class="f"><label>Откуда патрон</label>${seg('src', [['f', 'Заводской патрон'], ['b', 'Пуля (самокрут)']], d._src, 'Откуда патрон')}
+      <span class="hint">${d._src === 'f' ? 'Готовые патроны из магазина: вес пули, BC и скорость подставятся сами.' : 'Для тех, кто снаряжает патроны сам: выберите пулю, скорость укажите свою.'}</span></div>
+    ${d._src === 'f' ? `<div class="f"><label for="eFq">Патрон</label><input type="search" id="eFq" placeholder="Поиск: geco 11, rws evo, s&b 180…">
+      ${isFactory(b) ? `<span class="hint">Выбрано: <b>${esc(bFull(b))}</b></span>` : '<span class="hint">Выберите патрон в списке ниже</span>'}</div>
+    <div class="bullet-results" id="eFres"></div>
+    <span class="hint">Нет вашего патрона? Нажмите «Пуля (самокрут)»: там можно найти пулю или ввести вес и BC с коробки вручную.</span>` : `<div class="f"><label for="eBq">Пуля</label><input type="search" id="eBq" placeholder="Поиск: 308 175, 7н1, 5.45, lapua…">
+      ${b && !isFactory(b) ? `<span class="hint">Выбрано: <b>${esc(bFull(b) + ' · ' + b.caliber)}</b></span>` : '<span class="hint">Найдите пулю в списке ниже</span>'}</div>
     <div class="bullet-results" id="eBres"></div>
     <details id="customBox"><summary class="hint" style="cursor:pointer">Моей пули нет в списке — ввести вручную</summary>
       <div class="stack" style="margin-top:10px">
@@ -1107,13 +1134,14 @@ function renderEditor() {
         ${fNum('cbLen', 'Длина пули', 30, 'мм', 'Можно примерно')}
         <button class="btn" type="button" id="cbAdd">Добавить пулю</button>
       </div></details>
+`}
     ${b && b.bc_g7 ? `<div class="f"><label>Какой BC использовать</label>${seg('md', [['G7', `G7 (${b.bc_g7})`], ['G1', g1Label]], L.model === 'G7' ? 'G7' : 'G1', 'Модель сопротивления')}
       <span class="hint">${b.bc_g1_steps ? 'Ступенчатый G1 — так BC публикует Sierra, на дальних дистанциях точнее одного числа.' : 'Для длинных обтекаемых пуль G7 точнее'}</span></div>`
       : b && b.bc_g1_steps ? '<span class="hint">BC ступенчатый — по данным Sierra для разных скоростей.</span>' : ''}
     ${L.bcScale && L.bcScale !== 1 ? `<div class="alert info">BC уточнён по попаданиям: ×${L.bcScale} <button class="btn" type="button" id="eBcReset" style="margin-left:auto">Сбросить</button></div>` : ''}
     ${L.trued ? `<span class="hint">Последнее уточнение: ${L.trued.date}, на ${L.trued.dist} м (${L.trued.par === 'v0' ? 'скорость' : 'BC'}: ${L.trued.from} → ${L.trued.to})</span>` : ''}
     <div class="two">
-      ${fNum('eV0', 'Скорость пули', L.v0, 'м/с', 'Лучше по хронографу')}
+      ${fNum('eV0', 'Скорость пули', L.v0, 'м/с', isFactory(b) ? `С коробки: ${b.v0_ms} м/с${b.barrel_mm ? `, ствол ${b.barrel_mm} мм` : ''}. Ствол короче — скорость ниже. Точнее всего — хронограф` : 'Лучше по хронографу')}
       ${fNum('ePref', 'Измерена при', L.powderRefTemp, '°C', 'Температура патронов')}
     </div>
     ${fNum('eSens', 'Термочувствительность пороха', L.powderSens, 'м/с на 1 °C', '0 — не учитывать. Обычно 0.3–1.5')}
@@ -1135,14 +1163,50 @@ function renderEditor() {
     <button class="btn" type="button" id="eCancel">Отмена</button>
     ${d._isNew ? '' : '<button class="btn danger" type="button" id="eDel">Удалить</button>'}
   </div>`;
-  renderBulletResults('');
+  if (d._src === 'f') renderFactoryResults(''); else renderBulletResults('');
   updateSg();
+}
+// заводские патроны: сначала под калибр винтовки, по фирмам
+function renderFactoryResults(q) {
+  const box = $('#eFres'); if (!box) return;
+  const norm = t => String(t).toLowerCase().replace(/,/g, '.').replace(/×/g, 'x').replace(/х/g, 'x').replace(/&/g, '');
+  const words = norm(q).split(/\s+/).filter(Boolean);
+  const L = curL(), cal = findCal(draft.caliber);
+  const all = BULLET_DB.filter(isFactory);
+  const match = list => list.filter(b => {
+    const hay = norm(`${b.maker} ${b.maker.replace(/\s/g, '')} ${b.name} ${b.cartridge} ${b.cartridge.replace(/[^0-9a-z]/gi, '')} ${b.mass_g}г ${b.mass_g} ${fmt(b.mass_g, 1)} ${b.mass_gr}gr ${b.mass_gr} ${b.type || ''}`);
+    return words.every(w => hay.includes(w));
+  });
+  let list, head = '';
+  const own = cal ? all.filter(b => b.cartridge === cal.name) : [];
+  if (own.length) {
+    list = match(own);
+    head = `Патроны под ${esc(cal.name)}: ${list.length}${words.length ? ` из ${own.length}` : ''}.`;
+    if (!list.length && words.length) { list = match(all); head = `Под ${esc(cal.name)} не нашлось — показаны другие калибры.`; }
+  } else if (words.length) {
+    list = match(all);
+    head = draft.caliber ? `Для калибра «${esc(draft.caliber)}» заводских патронов в базе нет. Результаты поиска по всей базе:` : '';
+  } else {
+    list = [];
+    head = draft.caliber ? `Для калибра «${esc(draft.caliber)}» заводских патронов в базе пока нет. Наберите в поиске, например «308 geco», или выберите пулю на вкладке «Пуля (самокрут)».`
+      : 'Сначала выберите калибр винтовки выше — тогда здесь появятся патроны под него.';
+  }
+  list.sort((a, b) => a.maker.localeCompare(b.maker) || a.cartridge.localeCompare(b.cartridge) || a.mass_g - b.mass_g || a.name.localeCompare(b.name));
+  let html = head ? `<p class="hint" style="margin:0">${head}</p>` : '', prev = '';
+  for (const b of list.slice(0, 80)) {
+    if (b.maker !== prev) { html += `<p class="grp-head">${esc(b.maker)}</p>`; prev = b.maker; }
+    html += `<button type="button" class="bullet-opt" data-bid="${b.id}" aria-pressed="${b.id === L.bulletId}">
+    <b>${esc(b.name)} · ${gText(b.mass_g)} <span class="muted">(${b.mass_gr} gr)</span></b><small>${cal && b.cartridge === cal.name ? '' : esc(b.cartridge) + ' · '}BC G1 ${b.approx ? '≈' : ''}${b.bc_g1}${b.bc_g7 ? ' · G7 ' + b.bc_g7 : ''} · ${b.v0_ms} м/с${b.barrel_mm ? ` (ствол ${b.barrel_mm} мм)` : ''}${b.type ? ' · ' + esc(b.type) : ''}${b.note ? '<br>' + esc(b.note) : ''}</small></button>`;
+  }
+  if (list.length > 80) html += '<p class="hint">Показаны первые 80 — уточните поиск.</p>';
+  if (!list.length && words.length) html += '<p class="hint">Ничего не найдено. Попробуйте короче, например «geco 11» или «rws evo».</p>';
+  box.innerHTML = html;
 }
 function renderBulletResults(q) {
   const norm = t => t.toLowerCase().replace(/,/g, '.').replace(/×/g, 'x').replace(/х/g, 'x').replace(/н/g, 'n');
   const words = norm(q).split(/\s+/).filter(Boolean);
   const L = curL(), cal = findCal(draft.caliber);
-  let list = allBullets().filter(b => {
+  let list = allBullets().filter(b => !isFactory(b)).filter(b => {
     const hay = norm(`${b.maker} ${b.name} ${b.caliber} ${b.caliber.replace(/[^0-9a-zа-я]/gi, '')} ${b.mass_gr}gr ${b.mass_gr} ${b.mass_g}г`);
     return words.every(w => hay.includes(w));
   });
@@ -1175,6 +1239,7 @@ function updateSg() {
 }
 $('#editor').addEventListener('input', e => {
   if (e.target.id === 'eBq') { renderBulletResults(e.target.value); return; }
+  if (e.target.id === 'eFq') { renderFactoryResults(e.target.value); return; }
   if (e.target.id.startsWith('cb')) return;
   if (e.target.id === 'eZeroL') {
     readEditor();
@@ -1188,14 +1253,25 @@ $('#editor').addEventListener('input', e => {
     const c = findCal(e.target.value);
     document.querySelectorAll('#calChips .chip').forEach(b => b.setAttribute('aria-pressed', String(!!c && b.dataset.cal === c.name)));
     if (c && e.inputType === undefined) { $(`#calChips [data-cal="${c.name}"]`)?.click(); return; }   // выбрано из списка
-    renderBulletResults($('#eBq').value);
+    if ($('#eBq')) renderBulletResults($('#eBq').value); else renderFactoryResults($('#eFq').value);
   }
   if (e.target.id === 'eLName') $(`#eLoads [data-lid="${curL().id}"]`).textContent = loadLabel(curL());
 });
 $('#editor').addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
   const L = curL();
-  if (t.dataset.bid) { readEditor(); L.bulletId = t.dataset.bid; const b = bulletById(t.dataset.bid); L.model = b.bc_g7 ? (L.model || 'G7') : 'G1'; renderEditor(); return; }
+  if (t.dataset.bid) {
+    readEditor(); L.bulletId = t.dataset.bid; const b = bulletById(t.dataset.bid);
+    if (isFactory(b)) {
+      // заводской патрон: скорость с коробки, BC — как публикует производитель (у Geco и RWS только G1)
+      L.v0 = b.v0_ms; L.model = b.bc_g7 ? 'G7' : 'G1'; L.bcScale = 1; delete L.trued;
+      renderEditor();
+      toast(`Подставлено: ${gText(b.mass_g)}, BC ${b.bc_g7 ? 'G7 ' + b.bc_g7 : 'G1 ' + b.bc_g1}, ${b.v0_ms} м/с с коробки`);
+      return;
+    }
+    L.model = b.bc_g7 ? (L.model || 'G7') : 'G1'; renderEditor(); return;
+  }
+  if (t.dataset.src) { readEditor(); draft._src = t.dataset.src; renderEditor(); return; }
   if (t.dataset.cal) {
     readEditor();
     const c = findCal(t.dataset.cal);
@@ -1204,7 +1280,7 @@ $('#editor').addEventListener('click', e => {
     draft.twistIn = c.twist;
     // пуля другого калибра больше не подходит — сбрасываем, чтобы человек выбрал из подходящих
     const b = bulletById(curL().bulletId);
-    if (b && !c.keys.some(k => b.caliber.includes(k))) curL().bulletId = '';
+    if (b && (isFactory(b) ? b.cartridge !== c.name : !c.keys.some(k => b.caliber.includes(k)))) curL().bulletId = '';
     renderEditor();
     if (twistChanged) toast(`Подставлен типичный шаг нарезов 1:${c.twist}″ — проверьте в паспорте оружия`);
     return;
@@ -1217,12 +1293,12 @@ $('#editor').addEventListener('click', e => {
   if (t.dataset.ru) { readEditor(); draft.retUnits = t.dataset.ru; if (draft.retUnits !== 'MRAD' && draft.reticle === 'mildot') draft.reticle = 'hash'; renderEditor(); return; }
   if (t.dataset.fp) { readEditor(); draft.focal = t.dataset.fp; if (!draft.curMag) draft.curMag = draft.sfpMag; renderEditor(); return; }
   if (t.dataset.md) { readEditor(); L.model = t.dataset.md; renderEditor(); return; }
-  if (t.dataset.lid) { readEditor(); draft._loadId = t.dataset.lid; renderEditor(); return; }
+  if (t.dataset.lid) { readEditor(); draft._loadId = t.dataset.lid; draft._src = srcOf(curL()); renderEditor(); return; }
   if (t.dataset.addload) {
     readEditor();
     const nl = { id: 'l' + uid(), name: '', bulletId: '', model: 'G7', v0: L.v0, powderRefTemp: L.powderRefTemp, powderSens: L.powderSens };
-    draft.loads.push(nl); draft._loadId = nl.id; renderEditor();
-    $('#eBq').focus(); toast('Новый патрон: выберите пулю и укажите скорость');
+    draft.loads.push(nl); draft._loadId = nl.id; draft._src = 'f'; renderEditor();
+    $('#eFq').focus(); toast('Новый патрон: выберите его из списка или пулю на вкладке «Пуля (самокрут)»');
     return;
   }
   if (t.id === 'eDelLoad') {
@@ -1257,12 +1333,12 @@ $('#editor').addEventListener('submit', e => {
   e.preventDefault(); readEditor();
   if (!draft.name) { toast('Введите название винтовки'); $('#eName').focus(); return; }
   for (const L of draft.loads) {
-    if (!bulletById(L.bulletId)) { draft._loadId = L.id; renderEditor(); toast('Выберите пулю для этого патрона'); $('#eBq').focus(); return; }
-    if (!(L.v0 > 100)) { draft._loadId = L.id; renderEditor(); toast('Проверьте скорость пули'); $('#eV0').focus(); return; }
+    if (!bulletById(L.bulletId)) { draft._loadId = L.id; draft._src = srcOf(L); renderEditor(); toast('Выберите патрон или пулю'); ($('#eFq') || $('#eBq')).focus(); return; }
+    if (!(L.v0 > 100)) { draft._loadId = L.id; draft._src = srcOf(L); renderEditor(); toast('Проверьте скорость пули'); $('#eV0').focus(); return; }
   }
   const isNew = draft._isNew;
   draft.activeLoadId = draft._loadId || draft.activeLoadId;
-  delete draft._isNew; delete draft._loadId;
+  delete draft._isNew; delete draft._loadId; delete draft._src;
   migrateRifle(draft);
   if (isNew) {
     S.rifles = S.rifles.filter(r => !r.example);   // пример убираем, когда появилась своя
@@ -1659,7 +1735,7 @@ async function drawCard() {
   g.font = `400 25px ${BODY}`; g.fillStyle = C.muted;
   const bc = e.model === 'G7' && b.bc_g7 ? `G7 ${b.bc_g7}` : b.bc_g1_steps ? 'G1 ступенч.' : `G1 ${b.bc_g1}`;
   const ln = activeLoad(r).name;
-  g.fillText(`${ln ? ln + ' · ' : ''}${b.maker} ${b.mass_gr}gr ${b.name} · ${fmt(e.v0, Number.isInteger(e.v0) ? 0 : 1)} м/с · ${bc}`, pad, 226);
+  g.fillText(`${ln ? ln + ' · ' : ''}${bFull(b)} · ${fmt(e.v0, Number.isInteger(e.v0) ? 0 : 1)} м/с · ${bc}`, pad, 226, W - 2 * pad);
   g.fillText(`Пристрелка ${r.zeroM} м · клик ${r.click} ${r.units} · прицел ${fmt(r.sightCm, 1)} см`, pad, 262);
   g.fillText(`Сейчас: ${c.temp} °C · ${c.pressureMm} мм рт. ст. · ${c.humidity}% · угол ${c.lookDeg}° · ветер ${c.windMs} м/с ${c.windMs ? '(' + Math.round(c.windClock) + ' ч)' : ''}`, pad, 298);
   // таблица

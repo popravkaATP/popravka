@@ -2,7 +2,7 @@
 
     python tools/build.py
 
-Делает: index.html (ядро + база пуль внутри), manifest, service worker со списком файлов.
+Делает: index.html (ядро + база пуль и заводских патронов внутри), manifest, service worker со списком файлов.
 """
 import hashlib, json, os, re, shutil
 
@@ -14,6 +14,8 @@ def read(p): return open(os.path.join(SRC, p), encoding="utf-8").read()
 html = read("index_src.html")
 engine = read("engine.js").replace("if (typeof module !== 'undefined') module.exports = Ballistics;", "")
 bullets = json.loads(read("bullets_db.json"))["bullets"]
+# заводские патроны (Geco, RWS, S&B, Lapua…) — в той же базе, с пометкой kind: "factory"
+bullets += json.loads(read("cartridges_db.json"))["cartridges"]
 
 def must_replace(s, a, b):
     assert a in s, f"не найдено: {a[:60]}"

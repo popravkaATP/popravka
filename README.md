@@ -108,6 +108,7 @@ src/                 исходники приложения — меняйте 
   index_src.html     интерфейс
   engine.js          баллистическое ядро (сверено с Python-версией и py-ballisticcalc)
   bullets_db.json    база пуль
+  cartridges_db.json заводские патроны (Geco, RWS, S&B, Lapua): вес пули, BC и скорость с коробки
 tools/build.py       собирает www/ из src/
 tools/make_icons.py  рисует иконки
 www/                 готовое приложение (собирается автоматически)
